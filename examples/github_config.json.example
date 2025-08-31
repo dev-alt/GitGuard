@@ -1,0 +1,31 @@
+{
+  "api_url": "https://api.github.com",
+  "timeout": 30,
+  "max_retries": 3,
+  "rate_limit_buffer": 100,
+  "authentication": {
+    "method": "token",
+    "token": "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "username": "example-user"
+  },
+  "scan_config": {
+    "max_commit_history": 1000,
+    "max_file_size": 10485760,
+    "max_workers": 4,
+    "cache_enabled": true,
+    "cache_duration": 3600,
+    "deep_scan": true,
+    "include_branches": ["main", "master"],
+    "exclude_paths": [
+      "node_modules/",
+      ".git/",
+      "*.min.js",
+      "*.map"
+    ]
+  },
+  "detection": {
+    "enable_entropy_analysis": true,
+    "min_entropy": 4.5,
+    "min_string_length": 20
+  }
+}

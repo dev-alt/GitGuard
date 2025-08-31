@@ -1,0 +1,21 @@
+# GitGuard - GitHub Security Scanner
+# Core Dependencies
+
+# GitHub API Integration
+PyGithub==1.59.1
+requests==2.31.0
+
+# GUI Framework
+# tkinter is included with Python - no separate installation needed
+
+# Git Operations
+GitPython==3.1.40
+
+# Environment and Configuration
+python-dotenv==1.0.0
+
+# Security and Encryption
+cryptography==41.0.8
+
+# System Integration (Optional - for keyring support)
+keyring==24.3.0
