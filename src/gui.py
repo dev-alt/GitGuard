@@ -334,7 +334,7 @@ class RepositoryFrame(ttk.Frame):
         list_frame.grid(row=3, column=0, columnspan=4, sticky='nsew', pady=10)
         
         # Create treeview with checkboxes simulation
-        columns = ('selected', 'name', 'private', 'language', 'size', 'updated')
+        columns = ('selected', 'name', 'private', 'language', 'size', 'updated', 'full_name')
         self.repo_tree = ttk.Treeview(list_frame, columns=columns, show='tree headings', height=12)
         
         # Configure columns
@@ -358,6 +358,10 @@ class RepositoryFrame(ttk.Frame):
         
         self.repo_tree.heading('updated', text='Last Updated')
         self.repo_tree.column('updated', width=120, minwidth=100)
+        
+        # Hidden column for full_name (used for API calls)
+        self.repo_tree.heading('full_name', text='')
+        self.repo_tree.column('full_name', width=0, minwidth=0)
         
         # Scrollbars
         v_scrollbar = ttk.Scrollbar(list_frame, orient='vertical', command=self.repo_tree.yview)
@@ -517,6 +521,8 @@ class RepositoryFrame(ttk.Frame):
             item_id = self.repo_tree.insert('', 'end', values=(
                 '', repo['name'], private_text, language_text, size_text, updated_text
             ))
+            # Store full_name for API calls
+            self.repo_tree.set(item_id, 'full_name', repo['full_name'])
             
             # Store selection state
             self.repo_tree.set(item_id, 'selected', '☐')
@@ -563,6 +569,8 @@ class RepositoryFrame(ttk.Frame):
             item_id = self.repo_tree.insert('', 'end', values=(
                 '', repo['name'], private_text, language_text, size_text, updated_text
             ))
+            # Store full_name for API calls
+            self.repo_tree.set(item_id, 'full_name', repo['full_name'])
             self.repo_tree.set(item_id, 'selected', '☐')
         
         self.repo_status_label.config(text=f"Showing {len(filtered_repos)} of {len(self.repositories)} repositories")
@@ -623,8 +631,8 @@ class RepositoryFrame(ttk.Frame):
         selected_repos = []
         for item in self.repo_tree.get_children():
             if self.repo_tree.set(item, 'selected') == '☑':
-                repo_name = self.repo_tree.set(item, 'name')
-                selected_repos.append(repo_name)
+                repo_full_name = self.repo_tree.set(item, 'full_name')
+                selected_repos.append(repo_full_name)
         
         if not selected_repos:
             messagebox.showwarning("Warning", "Please select at least one repository to scan")
