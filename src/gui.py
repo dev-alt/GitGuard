@@ -9,6 +9,7 @@ Includes authentication, repository selection, scanning, and results display.
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import threading
+import time
 import os
 import json
 from typing import Dict, List, Optional
@@ -70,7 +71,7 @@ class AuthenticationFrame(ttk.Frame):
         self.password_entry.grid(row=2, column=1, padx=5, pady=5, sticky='w')
         
         # Warning
-        warning_text = "⚠️ May require 2FA setup. Token method recommended."
+        warning_text = "⚠️ GitHub deprecated password auth. Use Personal Access Token in password field.\nOr use Token method above (recommended)."
         ttk.Label(password_frame, text=warning_text, font=('Arial', 8), foreground='orange').grid(
             row=3, column=0, columnspan=2, sticky='w', padx=5, pady=5)
         
@@ -197,24 +198,39 @@ class AuthenticationFrame(ttk.Frame):
                     username = credentials.get('username')
                     password = credentials.get('password')
                     
-                    # Create GitHub client with username/password
-                    github_client = Github(username, password)
-                    
-                    # Test authentication
-                    try:
-                        user = github_client.get_user()
-                        rate_limit = github_client.get_rate_limit()
-                        remaining_calls = rate_limit.core.remaining
-                        
-                    except Exception as api_error:
-                        if "401" in str(api_error):
-                            raise ValueError("Invalid username/password")
-                        elif "403" in str(api_error):
-                            raise ValueError("Authentication failed - check 2FA settings")
-                        else:
-                            raise ValueError(f"GitHub API error: {api_error}")
+                    # Note: GitHub deprecated username/password for API access
+                    # Try to use it as a personal access token instead
+                    if len(password) > 30:  # Looks like a token
+                        github_client = Github(password)
+                        try:
+                            user = github_client.get_user()
+                            username = user.login
+                            rate_limit = github_client.get_rate_limit()
+                            remaining_calls = rate_limit.core.remaining
+                        except Exception as api_error:
+                            if "401" in str(api_error):
+                                raise ValueError("Invalid token in password field")
+                            else:
+                                raise ValueError(f"GitHub API error: {api_error}")
+                    else:
+                        # Try traditional username/password (likely to fail with modern GitHub)
+                        try:
+                            github_client = Github(username, password)
+                            user = github_client.get_user()
+                            rate_limit = github_client.get_rate_limit()
+                            remaining_calls = rate_limit.core.remaining
+                        except Exception as api_error:
+                            if "401" in str(api_error):
+                                raise ValueError("Username/password authentication failed. GitHub requires Personal Access Tokens for API access. Please use a token instead of password.")
+                            elif "403" in str(api_error):
+                                raise ValueError("Authentication failed - GitHub requires Personal Access Tokens for API access")
+                            else:
+                                raise ValueError(f"GitHub API error: {api_error}")
                 
                 # Successful authentication
+                if not github_client:
+                    raise ValueError("GitHub client not created properly")
+                
                 auth_data = {
                     'method': method,
                     'username': username,
@@ -420,7 +436,9 @@ class RepositoryFrame(ttk.Frame):
             try:
                 github_client = self.auth_data.get('github_client')
                 if not github_client:
-                    raise ValueError("No GitHub client available")
+                    # Debug info
+                    auth_keys = list(self.auth_data.keys()) if self.auth_data else ['None']
+                    raise ValueError(f"No GitHub client available. Auth data keys: {auth_keys}")
                 
                 repos = []
                 user = github_client.get_user()
