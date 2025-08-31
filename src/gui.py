@@ -1078,8 +1078,8 @@ class ResultsFrame(ttk.Frame):
     
     def load_results(self, scan_results=None):
         """Load scan results from actual scan or use mock data."""
-        if scan_results:
-            # Use real scan results
+        if scan_results is not None:
+            # Use real scan results (even if empty)
             self.results = []
             for finding in scan_results:
                 result = {
@@ -1123,34 +1123,42 @@ class ResultsFrame(ttk.Frame):
                 },
                 {
                     'repository': 'api-server',
-                'file': 'auth/keys.go',
-                'line': 45,
-                'risk': 'Critical',
-                'type': 'Private Keys',
-                'finding': 'JWT signing key',
-                'context': 'signingKey := "supersecretkey123"'
-            },
-            {
-                'repository': 'my-web-app',
-                'file': 'src/api.js',
-                'line': 28,
-                'risk': 'Medium',
-                'type': 'Tokens',
-                'finding': 'GitHub token in code',
-                'context': 'token: "ghp_xxxxxxxxxxxx"'
-            },
-            {
-                'repository': 'config-files',
-                'file': 'deploy.sh',
-                'line': 8,
-                'risk': 'High',
-                'type': 'Passwords',
-                'finding': 'SSH password',
-                'context': 'sshpass -p "admin123" ssh...'
-            },
-        ]
+                    'file': 'auth/keys.go',
+                    'line': 45,
+                    'risk': 'CRITICAL',
+                    'type': 'Private Keys',
+                    'finding': 'JWT signing key',
+                    'context': 'signingKey := "supersecretkey123"',
+                    'commit_hash': None,
+                    'commit_date': None
+                },
+                {
+                    'repository': 'my-web-app',
+                    'file': 'src/api.js',
+                    'line': 28,
+                    'risk': 'MEDIUM',
+                    'type': 'Tokens',
+                    'finding': 'GitHub token in code',
+                    'context': 'token: "ghp_xxxxxxxxxxxx"',
+                    'commit_hash': None,
+                    'commit_date': None
+                },
+                {
+                    'repository': 'config-files',
+                    'file': 'deploy.sh',
+                    'line': 8,
+                    'risk': 'HIGH',
+                    'type': 'Passwords',
+                    'finding': 'SSH password',
+                    'context': 'sshpass -p "admin123" ssh...',
+                    'commit_hash': None,
+                    'commit_date': None
+                },
+            ]
+            
+            self.results = mock_results
         
-        self.results = mock_results
+        # Always refresh display and summary after loading results
         self.refresh_results_display()
         self.update_summary()
     
