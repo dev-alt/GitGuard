@@ -14,6 +14,9 @@ A desktop GUI application for scanning GitHub repositories and commit history to
 - **Local Processing**: All scanning performed locally - no data transmitted to external services
 - **Export Options**: Generate reports in CSV, JSON, and PDF formats
 - **Risk Assessment**: Automatic risk scoring for discovered findings
+- **Settings Management**: Persistent configuration with customizable preferences
+- **Comprehensive Logging**: Full application logging with session tracking and error reporting
+- **Menu System**: Complete menu with settings, log management, and import/export options
 
 ## Detected Sensitive Data Types
 
@@ -182,8 +185,18 @@ GitGuard/
 ├── requirements-dev.txt    # Development dependencies
 ├── src/                    # Source code
 │   ├── __init__.py        # Package initialization
-│   └── gui.py            # Tkinter GUI application
-├── config/               # Configuration templates
+│   ├── gui.py            # Tkinter GUI application (2000+ lines)
+│   ├── logger.py         # Comprehensive logging system
+│   ├── settings.py       # Settings persistence and management
+│   ├── scanner.py        # Repository scanning engine
+│   └── detection.py      # Security pattern detection engine
+├── config/               # Configuration files (auto-created)
+│   ├── gitguard_settings.json    # User settings
+│   └── auth_cache.json           # Authentication cache
+├── logs/                 # Application logs (auto-created)
+│   ├── gitguard.log             # Main application log
+│   ├── gitguard_errors.log      # Error log
+│   └── session_*.log           # Session-specific logs
 ├── testdata/            # Test data (safe examples only)
 │   └── clean_example.py   # Clean file with no security issues
 ├── examples/            # Example configurations
@@ -237,7 +250,29 @@ GitGuard/
 - **Onboarding Reviews**: Scan inherited or acquired codebases
 - **Periodic Security Health Checks**: Monthly/quarterly repository assessments
 
-### Recent Updates (Session 3)
+### Recent Updates (Session 4) - NEW!
+
+🎉 **Major System Enhancements:**
+- ✅ **Comprehensive Logging System**: Full application logging with rotating log files, session tracking, and performance metrics
+- ✅ **Settings Persistence**: JSON-based configuration system with user preferences, window state, and authentication caching
+- ✅ **Enhanced User Interface**: Fixed Ctrl+A text selection in input fields, added menu system with settings dialog
+- ✅ **Settings Management**: Complete settings dialog with 5 categories (Interface, Scanning, Detection, Export, Logging)
+- ✅ **Advanced Features**: Log file management, settings import/export, authentication cache management
+
+📋 **New Settings Categories:**
+- **Interface Settings**: Window state, authentication caching, confirmations
+- **Scanning Settings**: Commit limits, scan depth, exclusions, parallel processing
+- **Detection Settings**: Entropy thresholds, secret length, test file exclusions
+- **Export Settings**: Default formats, low-risk inclusion, content options
+- **Logging Settings**: Log levels, file rotation, retention policies
+
+🔧 **Developer Experience:**
+- Comprehensive error logging and debugging information
+- Session-specific log files for troubleshooting
+- Configurable logging levels and file management
+- Settings persistence across application restarts
+
+### Previous Updates (Session 3)
 
 🎉 **All Critical Issues Resolved:**
 - ✅ **Repository Access Fixed**: Resolved 404 "Not Found" errors by using proper GitHub API repository format

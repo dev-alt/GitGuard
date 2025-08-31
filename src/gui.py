@@ -14,6 +14,12 @@ import os
 import json
 from typing import Dict, List, Optional
 from datetime import datetime
+try:
+    from .logger import get_logger, init_logging
+    from .settings import get_settings, init_settings
+except ImportError:
+    from logger import get_logger, init_logging
+    from settings import get_settings, init_settings
 
 class AuthenticationFrame(ttk.Frame):
     """Frame for GitHub authentication."""
@@ -43,10 +49,12 @@ class AuthenticationFrame(ttk.Frame):
         ttk.Label(token_frame, text="GitHub Token:").grid(row=1, column=0, sticky='w', padx=5, pady=5)
         self.token_entry = ttk.Entry(token_frame, show='*', width=50)
         self.token_entry.grid(row=1, column=1, padx=5, pady=5, sticky='ew')
+        self._bind_select_all(self.token_entry)
         
         ttk.Label(token_frame, text="Username (optional):").grid(row=2, column=0, sticky='w', padx=5, pady=5)
         self.token_username_entry = ttk.Entry(token_frame, width=30)
         self.token_username_entry.grid(row=2, column=1, padx=5, pady=5, sticky='w')
+        self._bind_select_all(self.token_username_entry)
         
         # Help text
         help_text = "Generate at: https://github.com/settings/tokens\nRequired permissions: repo (for private) or public_repo"
@@ -65,10 +73,12 @@ class AuthenticationFrame(ttk.Frame):
         ttk.Label(password_frame, text="Username:").grid(row=1, column=0, sticky='w', padx=5, pady=5)
         self.username_entry = ttk.Entry(password_frame, width=30)
         self.username_entry.grid(row=1, column=1, padx=5, pady=5, sticky='w')
+        self._bind_select_all(self.username_entry)
         
         ttk.Label(password_frame, text="Password:").grid(row=2, column=0, sticky='w', padx=5, pady=5)
         self.password_entry = ttk.Entry(password_frame, show='*', width=30)
         self.password_entry.grid(row=2, column=1, padx=5, pady=5, sticky='w')
+        self._bind_select_all(self.password_entry)
         
         # Warning
         warning_text = "⚠️ GitHub deprecated password auth. Use Personal Access Token in password field.\nOr use Token method above (recommended)."
@@ -131,6 +141,16 @@ class AuthenticationFrame(ttk.Frame):
         self.status_label.config(text=f"❌ Connection failed: {error}")
         self.test_button.config(state='normal')
     
+    def _bind_select_all(self, entry_widget):
+        """Bind Ctrl+A to select all text in Entry widget."""
+        def select_all(event):
+            entry_widget.select_range(0, 'end')
+            return 'break'  # Prevent default behavior
+        
+        # Bind both Control-a and Control-A to handle different cases
+        entry_widget.bind('<Control-a>', select_all)
+        entry_widget.bind('<Control-A>', select_all)
+    
     def authenticate(self):
         """Perform GitHub authentication."""
         method = self.auth_method.get()
@@ -162,6 +182,7 @@ class AuthenticationFrame(ttk.Frame):
         
         def auth_thread():
             try:
+                get_logger().info(f"Starting authentication using {method}", "AUTH")
                 from github import Github
                 
                 github_client = None
@@ -185,8 +206,10 @@ class AuthenticationFrame(ttk.Frame):
                         # Test API access with a simple call
                         rate_limit = github_client.get_rate_limit()
                         remaining_calls = rate_limit.core.remaining
+                        get_logger().debug(f"GitHub API rate limit remaining: {remaining_calls}", "AUTH")
                         
                     except Exception as api_error:
+                        get_logger().error(f"GitHub API test failed: {api_error}", "AUTH")
                         if "401" in str(api_error):
                             raise ValueError("Invalid token - authentication failed")
                         elif "403" in str(api_error):
@@ -201,25 +224,30 @@ class AuthenticationFrame(ttk.Frame):
                     # Note: GitHub deprecated username/password for API access
                     # Try to use it as a personal access token instead
                     if len(password) > 30:  # Looks like a token
+                        get_logger().info(f"Attempting token authentication via password field for user {username}", "AUTH")
                         github_client = Github(password)
                         try:
                             user = github_client.get_user()
                             username = user.login
                             rate_limit = github_client.get_rate_limit()
                             remaining_calls = rate_limit.core.remaining
+                            get_logger().debug(f"Token authentication successful, API calls remaining: {remaining_calls}", "AUTH")
                         except Exception as api_error:
+                            get_logger().error(f"Token authentication via password field failed: {api_error}", "AUTH")
                             if "401" in str(api_error):
                                 raise ValueError("Invalid token in password field")
                             else:
                                 raise ValueError(f"GitHub API error: {api_error}")
                     else:
                         # Try traditional username/password (likely to fail with modern GitHub)
+                        get_logger().warning(f"Attempting deprecated username/password authentication for user {username}", "AUTH")
                         try:
                             github_client = Github(username, password)
                             user = github_client.get_user()
                             rate_limit = github_client.get_rate_limit()
                             remaining_calls = rate_limit.core.remaining
                         except Exception as api_error:
+                            get_logger().error(f"Username/password authentication failed: {api_error}", "AUTH")
                             if "401" in str(api_error):
                                 raise ValueError("Username/password authentication failed. GitHub requires Personal Access Tokens for API access. Please use a token instead of password.")
                             elif "403" in str(api_error):
@@ -231,6 +259,7 @@ class AuthenticationFrame(ttk.Frame):
                 if not github_client:
                     raise ValueError("GitHub client not created properly")
                 
+                get_logger().log_authentication_attempt(method, username, True)
                 auth_data = {
                     'method': method,
                     'username': username,
@@ -242,6 +271,8 @@ class AuthenticationFrame(ttk.Frame):
                 self.after(0, lambda: self.auth_success(auth_data))
                 
             except Exception as e:
+                get_logger().log_authentication_attempt(method, credentials.get('username', 'unknown'), False)
+                get_logger().error(f"Authentication failed: {e}", "AUTH", e)
                 error_msg = str(e)
                 self.after(0, lambda: self.auth_error(error_msg))
         
@@ -445,6 +476,7 @@ class RepositoryFrame(ttk.Frame):
         
         def load_thread():
             try:
+                get_logger().info("Starting repository loading", "REPO")
                 github_client = self.auth_data.get('github_client')
                 if not github_client:
                     # Debug info
@@ -453,6 +485,7 @@ class RepositoryFrame(ttk.Frame):
                 
                 repos = []
                 user = github_client.get_user()
+                get_logger().debug(f"Loading repositories for user: {user.login}", "REPO")
                 
                 # Get user's repositories
                 for repo in user.get_repos(sort='updated', direction='desc'):
@@ -479,9 +512,12 @@ class RepositoryFrame(ttk.Frame):
                         # Skip repositories that cause errors (e.g., access issues)
                         continue
                 
+                get_logger().log_repository_operation("loading", len(repos), True)
                 self.after(0, lambda: self.repos_loaded(repos))
                 
             except Exception as e:
+                get_logger().log_repository_operation("loading", None, False)
+                get_logger().error(f"Repository loading failed: {e}", "REPO", e)
                 error_msg = str(e)
                 self.after(0, lambda: self.repos_error(error_msg))
         
@@ -800,6 +836,11 @@ class ScanProgressFrame(ttk.Frame):
     
     def start_scan(self, scan_config):
         """Start the scanning process."""
+        repo_count = len(scan_config.get('repositories', []))
+        is_auto_mode = scan_config.get('auto_mode', False)
+        scan_type = "auto scan" if is_auto_mode else "manual scan"
+        get_logger().log_scan_operation(f"{scan_type} start", f"{repo_count} repositories", True)
+        
         self.scan_config = scan_config
         self.pause_button.config(state='normal')
         self.cancel_button.config(state='normal')
@@ -807,7 +848,6 @@ class ScanProgressFrame(ttk.Frame):
         self.scanner = None
         
         # Check if auto mode
-        is_auto_mode = scan_config.get('auto_mode', False)
         auto_status = " (Auto Mode - Optimized)" if is_auto_mode else ""
         
         # Reset progress
@@ -1024,6 +1064,9 @@ class ScanProgressFrame(ttk.Frame):
     
     def scan_completed(self):
         """Handle scan completion."""
+        findings_count = len(self.scanner.results) if hasattr(self.scanner, 'results') else 0
+        get_logger().log_scan_operation("completion", f"{findings_count} findings", True)
+        
         self.status_label.config(text="✅ Scan completed successfully!")
         self.current_file_label.config(text="All files processed")
         
@@ -1473,19 +1516,37 @@ class GitGuardGUI:
     """Main GitGuard application window with full functionality."""
     
     def __init__(self):
+        # Initialize logging and settings systems
+        self.logger = init_logging()
+        self.settings = init_settings()
+        self.logger.log_application_start()
+        
         self.root = tk.Tk()
         self.root.title("GitGuard - GitHub Security Scanner v1.0.0")
-        self.root.geometry("1200x800")
+        
+        # Load window settings
+        geometry = self.settings.get('gui.window_geometry', '1200x800')
+        self.root.geometry(geometry)
         self.root.minsize(1000, 600)
+        
+        if self.settings.get('gui.window_maximized', False):
+            self.root.state('zoomed')  # Windows/Linux
         
         # Application state
         self.auth_data = None
         
+        # Handle window close event
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
         self.create_widgets()
         self.setup_styles()
+        self.load_cached_auth()
     
     def create_widgets(self):
         """Create main application widgets."""
+        # Create menu bar
+        self.create_menu()
+        
         # Create main notebook for tabs
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill='both', expand=True, padx=10, pady=10)
@@ -1553,6 +1614,14 @@ class GitGuardGUI:
     def on_authentication_success(self, auth_data):
         """Handle successful authentication."""
         self.auth_data = auth_data
+        
+        # Save auth cache if enabled
+        cache_auth_data = {
+            'username': auth_data.get('username', ''),
+            'method': auth_data.get('method', 'token'),
+            'last_used': datetime.now().isoformat()
+        }
+        self.settings.save_auth_cache(cache_auth_data)
         
         # Enable repository tab
         self.notebook.tab(1, state='normal')
@@ -1703,12 +1772,408 @@ repositories and commit history for sensitive information.
         
         messagebox.showinfo("About GitGuard", about_text)
     
+    def create_menu(self):
+        """Create application menu bar."""
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
+        
+        # File menu
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Settings...", command=self.show_settings_dialog)
+        file_menu.add_separator()
+        file_menu.add_command(label="Clear Auth Cache", command=self.clear_auth_cache)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.on_closing)
+        
+        # Tools menu
+        tools_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Tools", menu=tools_menu)
+        tools_menu.add_command(label="View Logs...", command=self.show_logs_dialog)
+        tools_menu.add_command(label="Export Settings...", command=self.export_settings)
+        tools_menu.add_command(label="Import Settings...", command=self.import_settings)
+        
+        # Help menu
+        help_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="About", command=self.show_about)
+    
+    def show_settings_dialog(self):
+        """Show settings configuration dialog."""
+        SettingsDialog(self.root, self.settings)
+    
+    def clear_auth_cache(self):
+        """Clear stored authentication cache."""
+        if messagebox.askyesno("Clear Auth Cache", "Clear stored authentication data?"):
+            self.settings.clear_auth_cache()
+            messagebox.showinfo("Success", "Authentication cache cleared.")
+    
+    def show_logs_dialog(self):
+        """Show logs directory information."""
+        log_info = self.logger.get_log_files_info()
+        info_text = f"""Log Directory: {log_info['log_directory']}
+
+Current Session: {log_info['session_log']}
+Main Log: {log_info['main_log']}
+Error Log: {log_info['error_log']}
+
+Recent Log Files:"""
+        
+        for log_file in log_info['log_files'][-5:]:  # Show last 5 files
+            info_text += f"\n• {log_file['name']} ({log_file['size']} bytes)"
+        
+        if messagebox.askyesno("Log Files", f"{info_text}\n\nOpen log directory?"):
+            import subprocess
+            import platform
+            log_dir = log_info['log_directory']
+            
+            if platform.system() == "Windows":
+                subprocess.run(f'explorer "{log_dir}"', shell=True)
+            elif platform.system() == "Darwin":  # macOS
+                subprocess.run(f'open "{log_dir}"', shell=True)
+            else:  # Linux
+                subprocess.run(f'xdg-open "{log_dir}"', shell=True)
+    
+    def export_settings(self):
+        """Export settings to file."""
+        filename = filedialog.asksaveasfilename(
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            title="Export Settings"
+        )
+        
+        if filename:
+            try:
+                import shutil
+                shutil.copy2(self.settings.settings_file, filename)
+                messagebox.showinfo("Success", f"Settings exported to:\n{filename}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to export settings:\n{e}")
+    
+    def import_settings(self):
+        """Import settings from file."""
+        filename = filedialog.askopenfilename(
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            title="Import Settings"
+        )
+        
+        if filename:
+            if messagebox.askyesno("Import Settings", "Import settings will replace current settings. Continue?"):
+                try:
+                    import shutil
+                    shutil.copy2(filename, self.settings.settings_file)
+                    self.settings.load_settings()
+                    messagebox.showinfo("Success", "Settings imported successfully.\nRestart the application for all changes to take effect.")
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to import settings:\n{e}")
+    
+    def load_cached_auth(self):
+        """Load cached authentication data if available."""
+        if self.settings.get('gui.remember_auth', False):
+            auth_cache = self.settings.load_auth_cache()
+            if auth_cache:
+                # Pre-fill authentication form with cached data
+                if hasattr(self, 'auth_frame'):
+                    username = auth_cache.get('username', '')
+                    method = auth_cache.get('method', 'token')
+                    
+                    if method == 'token' and hasattr(self.auth_frame, 'token_username_entry'):
+                        self.auth_frame.token_username_entry.delete(0, tk.END)
+                        self.auth_frame.token_username_entry.insert(0, username)
+                    elif method == 'password' and hasattr(self.auth_frame, 'username_entry'):
+                        self.auth_frame.username_entry.delete(0, tk.END)
+                        self.auth_frame.username_entry.insert(0, username)
+    
+    def save_window_settings(self):
+        """Save current window geometry and state."""
+        try:
+            # Save window geometry
+            geometry = self.root.geometry()
+            self.settings.set('gui.window_geometry', geometry)
+            
+            # Save maximized state
+            state = self.root.state()
+            self.settings.set('gui.window_maximized', state == 'zoomed')
+            
+            # Save settings to file
+            self.settings.save_settings()
+            
+        except Exception as e:
+            get_logger().error(f"Failed to save window settings: {e}", "GUI", e)
+    
+    def on_closing(self):
+        """Handle application closing."""
+        self.save_window_settings()
+        self.logger.log_application_stop()
+        self.root.destroy()
+    
     def run(self):
         """Start the GUI application."""
         try:
             self.root.mainloop()
         except KeyboardInterrupt:
-            pass
+            self.logger.log_application_stop()
+
+
+class SettingsDialog:
+    """Settings configuration dialog."""
+    
+    def __init__(self, parent, settings):
+        self.settings = settings
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title("GitGuard Settings")
+        self.dialog.geometry("600x500")
+        self.dialog.resizable(True, True)
+        self.dialog.transient(parent)
+        self.dialog.grab_set()
+        
+        # Center the dialog
+        parent.update_idletasks()
+        x = parent.winfo_x() + (parent.winfo_width() // 2) - 300
+        y = parent.winfo_y() + (parent.winfo_height() // 2) - 250
+        self.dialog.geometry(f"+{x}+{y}")
+        
+        self.create_widgets()
+    
+    def create_widgets(self):
+        """Create settings dialog widgets."""
+        # Create notebook for different setting categories
+        notebook = ttk.Notebook(self.dialog)
+        notebook.pack(fill='both', expand=True, padx=10, pady=10)
+        
+        # GUI Settings tab
+        gui_frame = ttk.Frame(notebook)
+        notebook.add(gui_frame, text="Interface")
+        self.create_gui_settings(gui_frame)
+        
+        # Scanning Settings tab
+        scan_frame = ttk.Frame(notebook)
+        notebook.add(scan_frame, text="Scanning")
+        self.create_scan_settings(scan_frame)
+        
+        # Detection Settings tab
+        detection_frame = ttk.Frame(notebook)
+        notebook.add(detection_frame, text="Detection")
+        self.create_detection_settings(detection_frame)
+        
+        # Export Settings tab
+        export_frame = ttk.Frame(notebook)
+        notebook.add(export_frame, text="Export")
+        self.create_export_settings(export_frame)
+        
+        # Logging Settings tab
+        logging_frame = ttk.Frame(notebook)
+        notebook.add(logging_frame, text="Logging")
+        self.create_logging_settings(logging_frame)
+        
+        # Button frame
+        button_frame = ttk.Frame(self.dialog)
+        button_frame.pack(fill='x', padx=10, pady=5)
+        
+        ttk.Button(button_frame, text="Reset to Defaults", 
+                  command=self.reset_to_defaults).pack(side='left')
+        
+        ttk.Frame(button_frame).pack(side='left', expand=True)  # Spacer
+        
+        ttk.Button(button_frame, text="Cancel", 
+                  command=self.dialog.destroy).pack(side='right', padx=5)
+        ttk.Button(button_frame, text="OK", 
+                  command=self.save_and_close).pack(side='right')
+    
+    def create_gui_settings(self, parent):
+        """Create GUI settings controls."""
+        # Remember authentication
+        self.remember_auth = tk.BooleanVar(value=self.settings.get('gui.remember_auth', False))
+        ttk.Checkbutton(parent, text="Remember authentication details", 
+                       variable=self.remember_auth).pack(anchor='w', pady=5)
+        
+        # Auto load repositories
+        self.auto_load_repos = tk.BooleanVar(value=self.settings.get('gui.auto_load_repos', False))
+        ttk.Checkbutton(parent, text="Automatically load repositories after authentication", 
+                       variable=self.auto_load_repos).pack(anchor='w', pady=5)
+        
+        # Confirm destructive actions
+        self.confirm_actions = tk.BooleanVar(value=self.settings.get('gui.confirm_destructive_actions', True))
+        ttk.Checkbutton(parent, text="Confirm destructive actions", 
+                       variable=self.confirm_actions).pack(anchor='w', pady=5)
+    
+    def create_scan_settings(self, parent):
+        """Create scanning settings controls."""
+        # Max commits
+        ttk.Label(parent, text="Maximum commits to scan per repository:").pack(anchor='w', pady=5)
+        self.max_commits = tk.IntVar(value=self.settings.get('scanning.max_commits', 100))
+        commits_frame = ttk.Frame(parent)
+        commits_frame.pack(fill='x', pady=5)
+        ttk.Scale(commits_frame, from_=10, to=500, variable=self.max_commits, 
+                 orient='horizontal').pack(side='left', expand=True, fill='x')
+        ttk.Label(commits_frame, textvariable=self.max_commits, width=4).pack(side='right')
+        
+        # Scan depth
+        ttk.Label(parent, text="Default scan depth:").pack(anchor='w', pady=5)
+        self.scan_depth = tk.StringVar(value=self.settings.get('scanning.scan_depth', 'current'))
+        depth_frame = ttk.Frame(parent)
+        depth_frame.pack(anchor='w', pady=5)
+        ttk.Radiobutton(depth_frame, text="Current state only", 
+                       variable=self.scan_depth, value='current').pack(anchor='w')
+        ttk.Radiobutton(depth_frame, text="Full commit history", 
+                       variable=self.scan_depth, value='history').pack(anchor='w')
+        
+        # Exclusions
+        self.exclude_build = tk.BooleanVar(value=self.settings.get('scanning.exclude_build_folders', True))
+        ttk.Checkbutton(parent, text="Exclude build folders (node_modules, dist, build)", 
+                       variable=self.exclude_build).pack(anchor='w', pady=5)
+        
+        self.exclude_deps = tk.BooleanVar(value=self.settings.get('scanning.exclude_dependencies', True))
+        ttk.Checkbutton(parent, text="Exclude dependency files", 
+                       variable=self.exclude_deps).pack(anchor='w', pady=5)
+        
+        self.parallel_scan = tk.BooleanVar(value=self.settings.get('scanning.parallel_scanning', True))
+        ttk.Checkbutton(parent, text="Enable parallel scanning", 
+                       variable=self.parallel_scan).pack(anchor='w', pady=5)
+    
+    def create_detection_settings(self, parent):
+        """Create detection settings controls."""
+        # Entropy threshold
+        ttk.Label(parent, text="Entropy threshold for secret detection:").pack(anchor='w', pady=5)
+        self.entropy_threshold = tk.DoubleVar(value=self.settings.get('detection.entropy_threshold', 4.0))
+        entropy_frame = ttk.Frame(parent)
+        entropy_frame.pack(fill='x', pady=5)
+        ttk.Scale(entropy_frame, from_=2.0, to=6.0, variable=self.entropy_threshold, 
+                 orient='horizontal').pack(side='left', expand=True, fill='x')
+        entropy_label = ttk.Label(entropy_frame, width=4)
+        entropy_label.pack(side='right')
+        
+        def update_entropy_label(*args):
+            entropy_label.config(text=f"{self.entropy_threshold.get():.1f}")
+        self.entropy_threshold.trace('w', update_entropy_label)
+        update_entropy_label()
+        
+        # Minimum secret length
+        ttk.Label(parent, text="Minimum secret length:").pack(anchor='w', pady=5)
+        self.min_secret_length = tk.IntVar(value=self.settings.get('detection.min_secret_length', 8))
+        length_frame = ttk.Frame(parent)
+        length_frame.pack(fill='x', pady=5)
+        ttk.Scale(length_frame, from_=4, to=32, variable=self.min_secret_length, 
+                 orient='horizontal').pack(side='left', expand=True, fill='x')
+        ttk.Label(length_frame, textvariable=self.min_secret_length, width=4).pack(side='right')
+        
+        # Exclude test files
+        self.exclude_tests = tk.BooleanVar(value=self.settings.get('detection.exclude_test_files', True))
+        ttk.Checkbutton(parent, text="Exclude test files from scanning", 
+                       variable=self.exclude_tests).pack(anchor='w', pady=5)
+        
+        # Custom patterns
+        self.custom_patterns = tk.BooleanVar(value=self.settings.get('detection.custom_patterns_enabled', True))
+        ttk.Checkbutton(parent, text="Enable custom pattern detection", 
+                       variable=self.custom_patterns).pack(anchor='w', pady=5)
+    
+    def create_export_settings(self, parent):
+        """Create export settings controls."""
+        # Default format
+        ttk.Label(parent, text="Default export format:").pack(anchor='w', pady=5)
+        self.export_format = tk.StringVar(value=self.settings.get('export.default_format', 'csv'))
+        format_frame = ttk.Frame(parent)
+        format_frame.pack(anchor='w', pady=5)
+        for fmt in ['csv', 'json', 'html']:
+            ttk.Radiobutton(format_frame, text=fmt.upper(), 
+                           variable=self.export_format, value=fmt).pack(side='left', padx=10)
+        
+        # Include options
+        self.include_low_risk = tk.BooleanVar(value=self.settings.get('export.include_low_risk', False))
+        ttk.Checkbutton(parent, text="Include low-risk findings in exports", 
+                       variable=self.include_low_risk).pack(anchor='w', pady=5)
+        
+        self.include_content = tk.BooleanVar(value=self.settings.get('export.include_file_content', True))
+        ttk.Checkbutton(parent, text="Include file content in exports", 
+                       variable=self.include_content).pack(anchor='w', pady=5)
+        
+        self.auto_timestamp = tk.BooleanVar(value=self.settings.get('export.auto_timestamp_files', True))
+        ttk.Checkbutton(parent, text="Automatically timestamp export files", 
+                       variable=self.auto_timestamp).pack(anchor='w', pady=5)
+    
+    def create_logging_settings(self, parent):
+        """Create logging settings controls."""
+        # Log level
+        ttk.Label(parent, text="Log level:").pack(anchor='w', pady=5)
+        self.log_level = tk.StringVar(value=self.settings.get('logging.log_level', 'INFO'))
+        level_frame = ttk.Frame(parent)
+        level_frame.pack(anchor='w', pady=5)
+        levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR']
+        ttk.Combobox(level_frame, textvariable=self.log_level, values=levels, 
+                    state='readonly', width=15).pack(side='left')
+        
+        # Max log size
+        ttk.Label(parent, text="Maximum log file size (MB):").pack(anchor='w', pady=(10, 5))
+        self.max_log_size = tk.IntVar(value=self.settings.get('logging.max_log_size_mb', 10))
+        size_frame = ttk.Frame(parent)
+        size_frame.pack(fill='x', pady=5)
+        ttk.Scale(size_frame, from_=1, to=100, variable=self.max_log_size, 
+                 orient='horizontal').pack(side='left', expand=True, fill='x')
+        ttk.Label(size_frame, textvariable=self.max_log_size, width=4).pack(side='right')
+        
+        # Keep logs days
+        ttk.Label(parent, text="Keep log files for (days):").pack(anchor='w', pady=(10, 5))
+        self.keep_logs_days = tk.IntVar(value=self.settings.get('logging.keep_logs_days', 30))
+        days_frame = ttk.Frame(parent)
+        days_frame.pack(fill='x', pady=5)
+        ttk.Scale(days_frame, from_=1, to=365, variable=self.keep_logs_days, 
+                 orient='horizontal').pack(side='left', expand=True, fill='x')
+        ttk.Label(days_frame, textvariable=self.keep_logs_days, width=4).pack(side='right')
+        
+        # Console logging
+        self.log_to_console = tk.BooleanVar(value=self.settings.get('logging.log_to_console', True))
+        ttk.Checkbutton(parent, text="Enable console logging", 
+                       variable=self.log_to_console).pack(anchor='w', pady=5)
+    
+    def save_and_close(self):
+        """Save settings and close dialog."""
+        try:
+            # Save GUI settings
+            self.settings.set('gui.remember_auth', self.remember_auth.get())
+            self.settings.set('gui.auto_load_repos', self.auto_load_repos.get())
+            self.settings.set('gui.confirm_destructive_actions', self.confirm_actions.get())
+            
+            # Save scanning settings
+            self.settings.set('scanning.max_commits', self.max_commits.get())
+            self.settings.set('scanning.scan_depth', self.scan_depth.get())
+            self.settings.set('scanning.exclude_build_folders', self.exclude_build.get())
+            self.settings.set('scanning.exclude_dependencies', self.exclude_deps.get())
+            self.settings.set('scanning.parallel_scanning', self.parallel_scan.get())
+            
+            # Save detection settings
+            self.settings.set('detection.entropy_threshold', self.entropy_threshold.get())
+            self.settings.set('detection.min_secret_length', self.min_secret_length.get())
+            self.settings.set('detection.exclude_test_files', self.exclude_tests.get())
+            self.settings.set('detection.custom_patterns_enabled', self.custom_patterns.get())
+            
+            # Save export settings
+            self.settings.set('export.default_format', self.export_format.get())
+            self.settings.set('export.include_low_risk', self.include_low_risk.get())
+            self.settings.set('export.include_file_content', self.include_content.get())
+            self.settings.set('export.auto_timestamp_files', self.auto_timestamp.get())
+            
+            # Save logging settings
+            self.settings.set('logging.log_level', self.log_level.get())
+            self.settings.set('logging.max_log_size_mb', self.max_log_size.get())
+            self.settings.set('logging.keep_logs_days', self.keep_logs_days.get())
+            self.settings.set('logging.log_to_console', self.log_to_console.get())
+            
+            # Save to file
+            if self.settings.save_settings():
+                messagebox.showinfo("Settings Saved", "Settings have been saved successfully.")
+                self.dialog.destroy()
+            else:
+                messagebox.showerror("Error", "Failed to save settings.")
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save settings:\n{e}")
+    
+    def reset_to_defaults(self):
+        """Reset all settings to default values."""
+        if messagebox.askyesno("Reset Settings", "Reset all settings to default values?"):
+            self.settings.reset_to_defaults()
+            self.settings.save_settings()
+            messagebox.showinfo("Reset Complete", "Settings have been reset to defaults.\nClose and reopen the settings dialog to see the changes.")
 
 
 def main():

@@ -14,7 +14,12 @@ import time
 from typing import Dict, List, Callable, Optional
 from git import Repo
 from github import Github
-from detection import SecurityPatternDetector, Finding, RiskLevel
+try:
+    from .detection import SecurityPatternDetector, Finding, RiskLevel
+    from .logger import get_logger
+except ImportError:
+    from detection import SecurityPatternDetector, Finding, RiskLevel
+    from logger import get_logger
 
 class ScanProgress:
     """Container for scan progress information."""
@@ -203,6 +208,11 @@ class RepositoryScanner:
                     
                     # Scan file content
                     file_findings = self.detector.scan_file(content_file.path, file_content)
+                    # Log security findings
+                    for finding in file_findings:
+                        get_logger().log_security_finding(
+                            repo_name, finding.file_path, finding.pattern_name, finding.risk_level.value
+                        )
                     findings.extend(file_findings)
                     
                 except Exception as e:
@@ -280,6 +290,11 @@ class RepositoryScanner:
                         try:
                             file_content = item.data_stream.read().decode('utf-8', errors='ignore')
                             file_findings = self.detector.scan_file(file_path, file_content, commit_hash, commit_date)
+                            # Log security findings
+                            for finding in file_findings:
+                                get_logger().log_security_finding(
+                                    repo_name, finding.file_path, finding.pattern_name, finding.risk_level.value
+                                )
                             findings.extend(file_findings)
                         except:
                             continue
