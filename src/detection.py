@@ -105,6 +105,16 @@ class SecurityPatternDetector:
                 "risk": RiskLevel.MEDIUM,
                 "description": "Secret environment variable detected"
             },
+            "docker_env_secrets": {
+                "pattern": r"(?i)(JWT_SECRET|DB_PASSWORD|API_KEY|SECRET_KEY|PRIVATE_KEY|ACCESS_TOKEN)\s*[:=]\s*\$\{[^}]+\}",
+                "risk": RiskLevel.HIGH,
+                "description": "Docker environment secret variable detected"
+            },
+            "exposed_env_vars": {
+                "pattern": r"(?i)- (JWT_SECRET|MONGO_INITDB_ROOT_PASSWORD|DATABASE_PASSWORD|API_SECRET|PRIVATE_KEY)=",
+                "risk": RiskLevel.HIGH,
+                "description": "Exposed environment variable in Docker/Config file"
+            },
             "aws_env_vars": {
                 "pattern": r"(?i)AWS_(ACCESS_KEY_ID|SECRET_ACCESS_KEY)\s*[:=]\s*['\"][A-Za-z0-9/+=]{16,}['\"]",
                 "risk": RiskLevel.HIGH,
@@ -129,6 +139,11 @@ class SecurityPatternDetector:
                 "risk": RiskLevel.HIGH,
                 "description": "Google API key detected"
             },
+            "gcp_service_account": {
+                "pattern": r"(?i)\.json.*service.?account|service.?account.*\.json|gcp.?creds.*\.json",
+                "risk": RiskLevel.CRITICAL,
+                "description": "Google Cloud service account key file reference detected"
+            },
             "slack_token": {
                 "pattern": r"xox[baprs]-[0-9]{12}-[0-9]{12}-[0-9a-zA-Z]{24}",
                 "risk": RiskLevel.HIGH,
@@ -152,6 +167,23 @@ class SecurityPatternDetector:
                 "pattern": r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}:[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>?~`]{4,}",
                 "risk": RiskLevel.MEDIUM,
                 "description": "Email and password combination detected"
+            },
+            
+            # Docker and Container specific
+            "docker_env_file": {
+                "pattern": r"(?i)env_file\s*:\s*-.*\.env",
+                "risk": RiskLevel.MEDIUM,
+                "description": "Docker environment file reference detected"
+            },
+            "docker_secrets_mount": {
+                "pattern": r"(?i)volumes.*secrets|secrets.*volumes|/secrets/|/config/.*\.json.*:ro",
+                "risk": RiskLevel.HIGH,
+                "description": "Docker secrets or credential file mount detected"
+            },
+            "hardcoded_db_creds": {
+                "pattern": r"(?i)(mongodb|mysql|postgres)://[^:\s]+:[^@\s]+@[^/\s]+",
+                "risk": RiskLevel.CRITICAL,
+                "description": "Database connection string with hardcoded credentials"
             },
             
             # Generic high entropy strings (potential secrets)
@@ -183,7 +215,16 @@ class SecurityPatternDetector:
             r"\.pfx$",
             r"docker-compose\.ya?ml$",
             r"\.npmrc$",
-            r"\.pypirc$"
+            r"\.pypirc$",
+            r"\.dockerenv$",
+            r"Dockerfile\.secrets$",
+            r"\.kube/config$",
+            r"\.aws/credentials$",
+            r"\.ssh/config$",
+            r"service.?account.*\.json$",
+            r"gcp.?creds.*\.json$",
+            r"firebase.?service.?account.*\.json$",
+            r"\.terraform/.*\.tfstate$"
         ]
     
     def calculate_entropy(self, text: str) -> float:
