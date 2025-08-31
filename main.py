@@ -51,6 +51,7 @@ def check_dependencies():
             print(f"  - {dep}")
         print("\nPlease install dependencies with:")
         print("  pip install -r requirements.txt")
+        print("  # Or: pip3 install -r requirements.txt")
         return False
     
     return True
