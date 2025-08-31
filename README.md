@@ -146,6 +146,15 @@ python src/gui.py
 }
 ```
 
+## Documentation
+
+📚 **Complete documentation is available in the [docs/](docs/) folder:**
+
+- **[Technical Specification](docs/TECHNICAL_SPECIFICATION.md)** - Architecture and implementation details
+- **[Security & Privacy Plan](docs/SECURITY_PRIVACY_PLAN.md)** - Security framework and threat model
+- **[Development Rules](docs/DEVELOPMENT_RULES.md)** - Development guidelines and security practices
+- **[Development Log](docs/development_log.md)** - Implementation progress and decisions
+
 ## Development
 
 ### Project Structure
@@ -161,7 +170,11 @@ gitguard/
 ├── config/               # Configuration templates
 ├── testdata/            # Test data (safe examples only)
 ├── examples/            # Example configurations
-└── docs/               # Documentation
+└── docs/               # Complete documentation
+    ├── TECHNICAL_SPECIFICATION.md
+    ├── SECURITY_PRIVACY_PLAN.md
+    ├── DEVELOPMENT_RULES.md
+    └── development_log.md
 ```
 
 ### Development Setup
