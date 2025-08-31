@@ -303,6 +303,12 @@ class RepositoryFrame(ttk.Frame):
                                              command=self.deselect_all, state='disabled')
         self.deselect_all_button.pack(side='left', padx=5)
         
+        ttk.Separator(controls_frame, orient='vertical').pack(side='left', fill='y', padx=10)
+        
+        self.auto_scan_button = ttk.Button(controls_frame, text="🚀 Auto Scan All", 
+                                          command=self.auto_scan_all, state='disabled')
+        self.auto_scan_button.pack(side='left', padx=5)
+        
         # Filter frame
         filter_frame = ttk.LabelFrame(self, text="Filters")
         filter_frame.grid(row=2, column=0, columnspan=4, sticky='ew', pady=10, padx=10)
@@ -424,6 +430,7 @@ class RepositoryFrame(ttk.Frame):
         self.auth_data = auth_data
         self.load_button.config(state='normal')
         self.refresh_button.config(state='normal')
+        self.auto_scan_button.config(state='normal')
         self.repo_status_label.config(text="Click 'Load Repositories' to fetch your repositories")
     
     def load_repositories(self):
@@ -495,6 +502,7 @@ class RepositoryFrame(ttk.Frame):
         self.refresh_button.config(state='normal')
         self.select_all_button.config(state='normal')
         self.deselect_all_button.config(state='normal')
+        self.auto_scan_button.config(state='normal')
         
         self.repo_status_label.config(text=f"✅ Loaded {len(repositories)} repositories")
     
@@ -649,6 +657,55 @@ class RepositoryFrame(ttk.Frame):
         
         # Notify parent to start scan
         self.on_scan_start(scan_config)
+    
+    def auto_scan_all(self):
+        """Automatically scan all repositories with optimized settings."""
+        if not self.repositories:
+            messagebox.showwarning("Warning", "Please load repositories first")
+            return
+        
+        # Count repositories
+        total_repos = len(self.repositories)
+        
+        # Show confirmation dialog
+        result = messagebox.askyesno(
+            "Auto Scan All Repositories",
+            f"This will scan ALL {total_repos} repositories in your account.\n\n"
+            f"⚡ Quick scan mode will be used for efficiency:\n"
+            f"• Current state only (no commit history)\n"
+            f"• Max 50 commits per repository\n"
+            f"• Focus on high-risk files and patterns\n\n"
+            f"This may take several minutes. Continue?",
+            icon='question'
+        )
+        
+        if not result:
+            return
+        
+        # Select all repositories
+        for item in self.repo_tree.get_children():
+            self.repo_tree.set(item, 'selected', '☑')
+        
+        # Create optimized scan configuration for auto mode
+        all_repos = []
+        for item in self.repo_tree.get_children():
+            repo_full_name = self.repo_tree.set(item, 'full_name')
+            all_repos.append(repo_full_name)
+        
+        scan_config = {
+            'repositories': all_repos,
+            'scan_depth': 'current',  # Optimized for speed
+            'max_commits': 50,  # Reduced for performance
+            'include_files': ['*'],
+            'exclude_patterns': ['node_modules', '.git', '__pycache__', '*.min.js', '*.min.css', 'dist/', 'build/'],
+            'auto_mode': True  # Flag for auto scanning mode
+        }
+        
+        # Update status
+        self.repo_status_label.config(text=f"🚀 Auto scanning {total_repos} repositories...")
+        
+        # Notify parent to start scan
+        self.on_scan_start(scan_config)
 
 
 class ScanProgressFrame(ttk.Frame):
@@ -749,12 +806,16 @@ class ScanProgressFrame(ttk.Frame):
         self.is_scanning = True
         self.scanner = None
         
+        # Check if auto mode
+        is_auto_mode = scan_config.get('auto_mode', False)
+        auto_status = " (Auto Mode - Optimized)" if is_auto_mode else ""
+        
         # Reset progress
         self.overall_progress['value'] = 0
         self.repo_progress['value'] = 0
         self.current_repo_label.config(text="Initializing...")
         self.current_file_label.config(text="")
-        self.status_label.config(text="Starting scan...")
+        self.status_label.config(text=f"Starting scan{auto_status}...")
         
         # Reset statistics
         for key in self.stat_labels:
@@ -1517,7 +1578,9 @@ class GitGuardGUI:
         self.progress_frame.view_results_button.config(command=self.show_results)
         
         repos_count = len(scan_config['repositories'])
-        self.status_bar.config(text=f"Scanning {repos_count} repositories...")
+        auto_mode = scan_config.get('auto_mode', False)
+        auto_text = " (Auto Mode)" if auto_mode else ""
+        self.status_bar.config(text=f"Scanning {repos_count} repositories{auto_text}...")
     
     def show_results(self):
         """Show scan results."""

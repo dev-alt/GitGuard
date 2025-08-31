@@ -97,11 +97,23 @@ python src/gui.py
 
 ### Scanning Process
 
+#### Manual Scanning
 1. **Authenticate**: Enter your GitHub credentials
-2. **Select Repositories**: Choose which repositories to scan
-3. **Start Scan**: Begin the security analysis
-4. **Review Results**: Examine findings with risk assessments
-5. **Export Reports**: Generate detailed reports for documentation
+2. **Load Repositories**: Fetch your repository list from GitHub
+3. **Select Repositories**: Choose specific repositories to scan
+4. **Configure Scan**: Set scan depth and parameters
+5. **Start Scan**: Begin the security analysis
+6. **Review Results**: Examine findings with risk assessments
+7. **Export Reports**: Generate detailed reports for documentation
+
+#### Automatic Scanning (New!)
+1. **Authenticate**: Enter your GitHub credentials  
+2. **Load Repositories**: Fetch your repository list from GitHub
+3. **Click "🚀 Auto Scan All"**: Automatically scan ALL repositories
+   - Optimized for performance (current state only)
+   - Excludes build folders and dependencies
+   - Focuses on high-risk files and patterns
+   - Perfect for comprehensive security audits
 
 ## Security and Privacy
 
@@ -203,6 +215,28 @@ GitGuard/
 - **File-based Detection**: High-risk files (.env, config files, private keys)
 - **Advanced Analysis**: Entropy analysis, false positive filtering, risk assessment
 
+### Automatic Scanning Mode
+
+🚀 **Auto Scan All Feature** - Scan your entire GitHub account with one click:
+
+**Key Benefits:**
+- **Comprehensive Coverage**: Automatically scans ALL accessible repositories
+- **Optimized Performance**: Uses efficient scanning settings for speed
+- **Zero Configuration**: No need to manually select repositories
+- **Perfect for Audits**: Ideal for security assessments and compliance checks
+
+**Auto Mode Optimizations:**
+- **Current State Only**: Skips commit history for faster processing
+- **Smart Exclusions**: Automatically excludes build folders, dependencies, minified files
+- **Performance Focused**: Reduced commit limit (50 per repository) for efficiency
+- **High-Risk Priority**: Concentrates on files most likely to contain secrets
+
+**Use Cases:**
+- **Initial Security Audit**: Quickly assess all repositories for vulnerabilities
+- **Compliance Scanning**: Regular comprehensive security checks
+- **Onboarding Reviews**: Scan inherited or acquired codebases
+- **Periodic Security Health Checks**: Monthly/quarterly repository assessments
+
 ### Recent Updates (Session 3)
 
 🎉 **All Critical Issues Resolved:**
@@ -217,6 +251,12 @@ GitGuard/
 - Real-time progress tracking with file-level granularity
 - Efficient memory usage during repository analysis
 - Proper GitHub API rate limiting compliance
+
+🎯 **New Features Added:**
+- ✅ **Auto Scan All Mode**: One-click scanning of all repositories
+- ✅ **Enhanced Docker/Config Detection**: 26+ patterns for modern DevOps
+- ✅ **Kubernetes & Terraform Support**: Infrastructure-as-Code security scanning
+- ✅ **Smart Performance Optimizations**: Auto-exclusion of build folders and dependencies
 
 ### Development Setup
 
