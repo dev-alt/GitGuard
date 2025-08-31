@@ -56,8 +56,8 @@ A desktop GUI application for scanning GitHub repositories and commit history to
 
 1. **Clone the repository:**
 ```bash
-git clone https://github.com/yourusername/gitguard.git
-cd gitguard
+git clone https://github.com/dev-alt/GitGuard.git
+cd GitGuard
 ```
 
 2. **Create virtual environment:**
@@ -76,6 +76,10 @@ pip install -r requirements.txt
 ### Starting the Application
 
 ```bash
+# Method 1: Using main entry point (recommended)
+python main.py
+
+# Method 2: Direct GUI launch  
 python src/gui.py
 ```
 
@@ -160,22 +164,41 @@ python src/gui.py
 ### Project Structure
 
 ```
-gitguard/
+GitGuard/
+├── main.py                 # Main application entry point
+├── requirements.txt        # Python dependencies  
+├── requirements-dev.txt    # Development dependencies
 ├── src/                    # Source code
-│   ├── auth.py            # GitHub authentication
-│   ├── scanner.py         # Repository scanning logic
-│   ├── detection.py       # Pattern detection engine
-│   ├── gui.py            # Tkinter GUI application
-│   └── reporting.py      # Report generation
+│   ├── __init__.py        # Package initialization
+│   └── gui.py            # Tkinter GUI application
 ├── config/               # Configuration templates
 ├── testdata/            # Test data (safe examples only)
+│   └── clean_example.py   # Clean file with no security issues
 ├── examples/            # Example configurations
+│   └── github_config.json.example
 └── docs/               # Complete documentation
+    ├── README.md          # Documentation index
     ├── TECHNICAL_SPECIFICATION.md
-    ├── SECURITY_PRIVACY_PLAN.md
+    ├── SECURITY_PRIVACY_PLAN.md  
     ├── DEVELOPMENT_RULES.md
     └── development_log.md
 ```
+
+### Current Implementation Status
+
+✅ **Core Infrastructure Complete:**
+- Application entry point with dependency checking
+- Professional GUI interface with documentation integration
+- Project structure and configuration management
+- Requirements specification for all dependencies
+- Security-focused development approach
+
+🚧 **Advanced Features (Planned):**
+- Full GitHub authentication system
+- 120+ pattern detection engine  
+- Repository scanning with commit history traversal
+- Multi-format reporting (CSV, JSON, HTML)
+- Advanced GUI with scan progress and results display
 
 ### Development Setup
 
