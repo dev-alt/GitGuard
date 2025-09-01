@@ -1,0 +1,35 @@
+{
+  "gui": {
+    "window_geometry": "1200x800+423+332",
+    "window_maximized": false,
+    "remember_auth": false,
+    "auto_load_repos": false,
+    "confirm_destructive_actions": true
+  },
+  "scanning": {
+    "max_commits": 100,
+    "scan_depth": "current",
+    "exclude_build_folders": true,
+    "exclude_dependencies": true,
+    "parallel_scanning": true,
+    "auto_scan_timeout": 300
+  },
+  "detection": {
+    "entropy_threshold": 4.0,
+    "min_secret_length": 8,
+    "exclude_test_files": true,
+    "custom_patterns_enabled": true
+  },
+  "export": {
+    "default_format": "csv",
+    "include_low_risk": false,
+    "include_file_content": true,
+    "auto_timestamp_files": true
+  },
+  "logging": {
+    "log_level": "INFO",
+    "max_log_size_mb": 10,
+    "keep_logs_days": 30,
+    "log_to_console": true
+  }
+}

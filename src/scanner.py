@@ -161,7 +161,7 @@ class RepositoryScanner:
         return findings
     
     def _scan_current_state(self, repo_obj, include_files: List[str], exclude_patterns: List[str]) -> List[Finding]:
-        """Scan current repository state."""
+        """Scan current repository state with optimized batch processing."""
         findings = []
         
         try:
@@ -169,58 +169,180 @@ class RepositoryScanner:
             contents = repo_obj.get_contents("")
             files_to_scan = []
             
-            # Collect all files recursively
-            self._collect_files(repo_obj, contents, files_to_scan, exclude_patterns)
+            # Collect all files recursively with better filtering
+            self._collect_files_optimized(repo_obj, contents, files_to_scan, exclude_patterns)
+            
+            # Prioritize high-risk files
+            files_to_scan = self._prioritize_files(files_to_scan)
             
             self.progress.files_total += len(files_to_scan)
             
-            for i, content_file in enumerate(files_to_scan):
+            # Process files in batches for better performance
+            batch_size = min(10, len(files_to_scan))  # Process up to 10 files concurrently
+            for i in range(0, len(files_to_scan), batch_size):
                 if self.progress.is_cancelled:
                     break
+                
+                batch = files_to_scan[i:i + batch_size]
+                batch_findings = self._process_file_batch(batch, repo_obj.name)
+                findings.extend(batch_findings)
+                
+                # Update progress for the entire batch
+                self.progress.files_processed += len(batch)
+                self.progress.repo_percentage = (i + len(batch)) / len(files_to_scan) * 100
                 
                 # Wait if paused
                 while self.progress.is_paused and not self.progress.is_cancelled:
                     time.sleep(0.1)
                 
-                if self.progress.is_cancelled:
-                    break
-                
-                self.progress.current_file = content_file.path
-                self.progress.files_processed += 1
-                self.progress.repo_percentage = (i + 1) / len(files_to_scan) * 100
-                
-                self.update_progress(
-                    current_file=content_file.path,
-                    status_message=f"Scanning file: {content_file.path}"
-                )
-                
-                # Skip binary files and large files
-                if content_file.size > 1024 * 1024:  # Skip files larger than 1MB
-                    continue
-                
-                try:
-                    # Decode file content
-                    if content_file.encoding == 'base64':
-                        import base64
-                        file_content = base64.b64decode(content_file.content).decode('utf-8', errors='ignore')
-                    else:
-                        file_content = content_file.decoded_content.decode('utf-8', errors='ignore')
-                    
-                    # Scan file content
-                    file_findings = self.detector.scan_file(content_file.path, file_content)
-                    # Log security findings
-                    for finding in file_findings:
-                        get_logger().log_security_finding(
-                            repo_name, finding.file_path, finding.pattern_name, finding.risk_level.value
-                        )
-                    findings.extend(file_findings)
-                    
-                except Exception as e:
-                    # Skip files that can't be processed
-                    continue
+                if batch:  # Update progress with last file in batch
+                    self.update_progress(
+                        current_file=batch[-1].path,
+                        status_message=f"Processed batch: {len(batch)} files"
+                    )
         
         except Exception as e:
             raise Exception(f"Failed to scan current state: {str(e)}")
+        
+        return findings
+    
+    def _collect_files_optimized(self, repo_obj, contents, files_to_scan: List, exclude_patterns: List[str]):
+        """Optimized file collection with better filtering."""
+        queue = list(contents) if isinstance(contents, list) else [contents]
+        
+        while queue:
+            if self.progress.is_cancelled:
+                break
+                
+            content = queue.pop(0)
+            
+            # Skip if path matches exclude patterns
+            if self._should_exclude_path(content.path, exclude_patterns):
+                continue
+            
+            if content.type == "file":
+                # Pre-filter by file size and type for better performance
+                if self._is_scannable_file(content):
+                    files_to_scan.append(content)
+            elif content.type == "dir":
+                try:
+                    # Add directory contents to queue
+                    dir_contents = repo_obj.get_contents(content.path)
+                    if isinstance(dir_contents, list):
+                        queue.extend(dir_contents)
+                    else:
+                        queue.append(dir_contents)
+                except:
+                    # Skip directories we can't access
+                    continue
+    
+    def _should_exclude_path(self, path: str, exclude_patterns: List[str]) -> bool:
+        """Check if path should be excluded with optimized patterns."""
+        # Common exclusions for performance
+        performance_excludes = [
+            'node_modules/', '.git/', 'dist/', 'build/', 'target/', 'bin/', 'obj/',
+            '__pycache__/', '.venv/', 'venv/', '.pytest_cache/', '.mypy_cache/',
+            'vendor/', '.gradle/', '.m2/', 'package-lock.json', 'yarn.lock',
+            '.min.js', '.min.css', '.bundle.js', '.compiled.'
+        ]
+        
+        # Quick check for common performance exclusions
+        path_lower = path.lower()
+        for exclude in performance_excludes:
+            if exclude in path_lower:
+                return True
+        
+        # Check custom exclude patterns
+        for pattern in exclude_patterns:
+            if pattern in path:
+                return True
+        
+        return False
+    
+    def _is_scannable_file(self, content_file) -> bool:
+        """Check if file is worth scanning."""
+        # Skip very large files (>1MB)
+        if content_file.size > 1024 * 1024:
+            return False
+        
+        # Skip binary file extensions
+        binary_extensions = {
+            '.exe', '.dll', '.so', '.dylib', '.bin', '.zip', '.tar', '.gz', 
+            '.rar', '.7z', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt',
+            '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.ico', '.svg', '.webp',
+            '.mp3', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.woff', '.woff2',
+            '.ttf', '.eot', '.otf'
+        }
+        
+        file_ext = '.' + content_file.path.split('.')[-1].lower() if '.' in content_file.path else ''
+        if file_ext in binary_extensions:
+            return False
+        
+        # Skip empty files
+        if content_file.size == 0:
+            return False
+        
+        return True
+    
+    def _prioritize_files(self, files_to_scan: List) -> List:
+        """Prioritize files by security relevance."""
+        high_priority = []
+        medium_priority = []
+        low_priority = []
+        
+        high_risk_patterns = ['.env', 'config', 'secret', 'key', 'password', 'auth', 'cred']
+        medium_risk_extensions = {'.json', '.yaml', '.yml', '.xml', '.ini', '.conf', '.cfg'}
+        
+        for file_content in files_to_scan:
+            file_path = file_content.path.lower()
+            
+            # High priority: Files likely to contain secrets
+            if any(pattern in file_path for pattern in high_risk_patterns):
+                high_priority.append(file_content)
+            # Medium priority: Configuration-like files
+            elif any(file_path.endswith(ext) for ext in medium_risk_extensions):
+                medium_priority.append(file_content)
+            else:
+                low_priority.append(file_content)
+        
+        # Return prioritized list
+        return high_priority + medium_priority + low_priority
+    
+    def _process_file_batch(self, batch: List, repo_name: str) -> List[Finding]:
+        """Process a batch of files efficiently."""
+        findings = []
+        
+        for content_file in batch:
+            if self.progress.is_cancelled:
+                break
+                
+            try:
+                # Decode file content
+                if content_file.encoding == 'base64':
+                    import base64
+                    file_content = base64.b64decode(content_file.content).decode('utf-8', errors='ignore')
+                else:
+                    file_content = content_file.decoded_content.decode('utf-8', errors='ignore')
+                
+                # Skip files that are too large after decoding
+                if len(file_content) > 500000:  # 500KB of text
+                    continue
+                
+                # Scan file content
+                file_findings = self.detector.scan_file(content_file.path, file_content)
+                
+                # Log security findings
+                for finding in file_findings:
+                    get_logger().log_security_finding(
+                        repo_name, finding.file_path, finding.pattern_name, finding.risk_level.value
+                    )
+                
+                findings.extend(file_findings)
+                
+            except Exception as e:
+                # Skip files that can't be processed
+                get_logger().debug(f"Skipped file {content_file.path}: {e}", "SCAN")
+                continue
         
         return findings
     

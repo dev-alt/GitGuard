@@ -1510,6 +1510,369 @@ Scan completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                 messagebox.showinfo("Success", f"Summary saved to {filename}")
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to save summary: {e}")
+    
+    def export_csv(self):
+        """Export results to CSV format."""
+        if not self.results:
+            messagebox.showwarning("No Data", "No scan results to export.")
+            return
+        
+        filename = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+            title="Export to CSV"
+        )
+        
+        if filename:
+            try:
+                import csv
+                with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+                    fieldnames = ['repository', 'file', 'line', 'risk', 'type', 'finding', 'context', 'commit_hash', 'commit_date']
+                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                    
+                    writer.writeheader()
+                    for result in self.results:
+                        writer.writerow(result)
+                
+                messagebox.showinfo("Success", f"Results exported to {filename}")
+                get_logger().info(f"Results exported to CSV: {filename}", "EXPORT")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to export CSV: {e}")
+                get_logger().error(f"CSV export failed: {e}", "EXPORT", e)
+    
+    def export_json(self):
+        """Export results to JSON format."""
+        if not self.results:
+            messagebox.showwarning("No Data", "No scan results to export.")
+            return
+        
+        filename = filedialog.asksaveasfilename(
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            title="Export to JSON"
+        )
+        
+        if filename:
+            try:
+                import json
+                export_data = {
+                    "scan_metadata": {
+                        "timestamp": datetime.now().isoformat(),
+                        "tool": "GitGuard",
+                        "version": "1.0.0",
+                        "total_findings": len(self.results)
+                    },
+                    "findings": self.results
+                }
+                
+                with open(filename, 'w', encoding='utf-8') as jsonfile:
+                    json.dump(export_data, jsonfile, indent=2, ensure_ascii=False)
+                
+                messagebox.showinfo("Success", f"Results exported to {filename}")
+                get_logger().info(f"Results exported to JSON: {filename}", "EXPORT")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to export JSON: {e}")
+                get_logger().error(f"JSON export failed: {e}", "EXPORT", e)
+    
+    def export_html(self):
+        """Export results to HTML report format."""
+        if not self.results:
+            messagebox.showwarning("No Data", "No scan results to export.")
+            return
+        
+        filename = filedialog.asksaveasfilename(
+            defaultextension=".html",
+            filetypes=[("HTML files", "*.html"), ("All files", "*.*")],
+            title="Export HTML Report"
+        )
+        
+        if filename:
+            try:
+                # Generate comprehensive HTML report
+                html_content = self._generate_html_report()
+                
+                with open(filename, 'w', encoding='utf-8') as htmlfile:
+                    htmlfile.write(html_content)
+                
+                messagebox.showinfo("Success", f"HTML report exported to {filename}")
+                get_logger().info(f"HTML report exported: {filename}", "EXPORT")
+                
+                # Ask if user wants to open the report
+                if messagebox.askyesno("Open Report", "Would you like to open the HTML report in your browser?"):
+                    import webbrowser
+                    webbrowser.open(f"file://{os.path.abspath(filename)}")
+                    
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to export HTML: {e}")
+                get_logger().error(f"HTML export failed: {e}", "EXPORT", e)
+    
+    def _generate_html_report(self):
+        """Generate comprehensive HTML report."""
+        # Calculate statistics
+        risk_counts = {'Critical': 0, 'High': 0, 'Medium': 0, 'Low': 0}
+        repo_counts = {}
+        file_types = {}
+        
+        for result in self.results:
+            risk = result.get('risk', 'Unknown')
+            if risk in risk_counts:
+                risk_counts[risk] += 1
+            
+            repo = result.get('repository', 'Unknown')
+            repo_counts[repo] = repo_counts.get(repo, 0) + 1
+            
+            file_path = result.get('file', '')
+            file_ext = file_path.split('.')[-1] if '.' in file_path else 'no extension'
+            file_types[file_ext] = file_types.get(file_ext, 0) + 1
+        
+        total_findings = len(self.results)
+        scan_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        html_template = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitGuard Security Scan Report</title>
+    <style>
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }}
+        .container {{
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }}
+        .header {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }}
+        .header h1 {{
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }}
+        .header .subtitle {{
+            margin-top: 10px;
+            font-size: 1.1em;
+            opacity: 0.9;
+        }}
+        .summary {{
+            padding: 30px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+        }}
+        .summary h2 {{
+            color: #495057;
+            margin-top: 0;
+        }}
+        .stats-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }}
+        .stat-card {{
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }}
+        .stat-number {{
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }}
+        .stat-label {{
+            color: #6c757d;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }}
+        .critical {{ color: #dc3545; }}
+        .high {{ color: #fd7e14; }}
+        .medium {{ color: #ffc107; }}
+        .low {{ color: #28a745; }}
+        .findings {{
+            padding: 0;
+        }}
+        .findings h2 {{
+            padding: 30px 30px 0;
+            color: #495057;
+        }}
+        .findings-table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }}
+        .findings-table th {{
+            background: #e9ecef;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #495057;
+            border-bottom: 2px solid #dee2e6;
+        }}
+        .findings-table td {{
+            padding: 12px 15px;
+            border-bottom: 1px solid #dee2e6;
+            vertical-align: top;
+        }}
+        .findings-table tr:hover {{
+            background-color: #f8f9fa;
+        }}
+        .risk-badge {{
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: white;
+        }}
+        .risk-critical {{
+            background-color: #dc3545;
+        }}
+        .risk-high {{
+            background-color: #fd7e14;
+        }}
+        .risk-medium {{
+            background-color: #ffc107;
+            color: #212529;
+        }}
+        .risk-low {{
+            background-color: #28a745;
+        }}
+        .code-snippet {{
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            max-width: 300px;
+            overflow-x: auto;
+        }}
+        .footer {{
+            background: #495057;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            font-size: 0.9em;
+        }}
+        .no-findings {{
+            text-align: center;
+            padding: 60px 30px;
+            color: #6c757d;
+        }}
+        .no-findings h3 {{
+            color: #28a745;
+            font-size: 1.5em;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛡️ GitGuard Security Report</h1>
+            <div class="subtitle">Comprehensive Repository Security Analysis</div>
+            <div class="subtitle">Generated on {scan_time}</div>
+        </div>
+        
+        <div class="summary">
+            <h2>📊 Summary</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number">{total_findings}</div>
+                    <div class="stat-label">Total Findings</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number critical">{risk_counts['Critical']}</div>
+                    <div class="stat-label">Critical</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number high">{risk_counts['High']}</div>
+                    <div class="stat-label">High Risk</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number medium">{risk_counts['Medium']}</div>
+                    <div class="stat-label">Medium Risk</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number low">{risk_counts['Low']}</div>
+                    <div class="stat-label">Low Risk</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">{len(repo_counts)}</div>
+                    <div class="stat-label">Repositories</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="findings">"""
+        
+        if total_findings > 0:
+            html_template += f"""
+            <h2>🔍 Security Findings</h2>
+            <table class="findings-table">
+                <thead>
+                    <tr>
+                        <th>Repository</th>
+                        <th>File</th>
+                        <th>Line</th>
+                        <th>Risk</th>
+                        <th>Type</th>
+                        <th>Finding</th>
+                        <th>Context</th>
+                    </tr>
+                </thead>
+                <tbody>"""
+            
+            for result in self.results:
+                risk_class = result.get('risk', 'unknown').lower()
+                html_template += f"""
+                    <tr>
+                        <td>{result.get('repository', 'N/A')}</td>
+                        <td><code>{result.get('file', 'N/A')}</code></td>
+                        <td>{result.get('line', 'N/A')}</td>
+                        <td><span class="risk-badge risk-{risk_class}">{result.get('risk', 'Unknown')}</span></td>
+                        <td>{result.get('type', 'N/A')}</td>
+                        <td>{result.get('finding', 'N/A')}</td>
+                        <td><div class="code-snippet">{result.get('context', 'N/A')[:100]}{'...' if len(result.get('context', '')) > 100 else ''}</div></td>
+                    </tr>"""
+            
+            html_template += """
+                </tbody>
+            </table>"""
+        else:
+            html_template += """
+            <div class="no-findings">
+                <h3>✅ No Security Issues Found</h3>
+                <p>Congratulations! No security vulnerabilities were detected in the scanned repositories.</p>
+                <p>Continue following security best practices and perform regular scans.</p>
+            </div>"""
+        
+        html_template += f"""
+        </div>
+        
+        <div class="footer">
+            <p>Generated by GitGuard v1.0.0 | <a href="https://github.com/dev-alt/GitGuard" style="color: #fff;">GitHub Repository</a></p>
+            <p>For questions or support, please visit the project repository</p>
+        </div>
+    </div>
+</body>
+</html>"""
+        
+        return html_template
 
 
 class GitGuardGUI:

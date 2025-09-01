@@ -259,10 +259,17 @@ class SecurityPatternDetector:
         findings = []
         lines = content.split('\n')
         
+        # Get file extension for context-aware filtering
+        file_ext = file_path.lower().split('.')[-1] if '.' in file_path else ''
+        
         for line_num, line in enumerate(lines, 1):
             # Skip empty lines and comments
             stripped_line = line.strip()
             if not stripped_line or stripped_line.startswith('#') or stripped_line.startswith('//'):
+                continue
+            
+            # Skip XML/XAML comments
+            if stripped_line.startswith('<!--') or stripped_line.endswith('-->'):
                 continue
             
             for pattern_name, pattern_info in self.patterns.items():
@@ -276,6 +283,10 @@ class SecurityPatternDetector:
                         entropy = self.calculate_entropy(matched_text)
                         if entropy < 4.0:  # Skip low entropy matches
                             continue
+                    
+                    # Context-aware filtering for specific file types
+                    if self._is_context_false_positive(matched_text, pattern_name, file_ext, line):
+                        continue
                     
                     # Skip obvious false positives
                     if self._is_false_positive(matched_text, pattern_name):
@@ -312,6 +323,26 @@ class SecurityPatternDetector:
                 r"^[a-f0-9]{32}$",  # MD5 hash
                 r"^[a-f0-9]{40}$",  # SHA1 hash
                 r"^[a-f0-9]{64}$",  # SHA256 hash
+            ],
+            "secret_env_var": [
+                r"Key=.*Brush",  # CSS/XAML brushes
+                r"Key=.*Color",  # Color keys
+                r"Key=.*Style",  # Style keys
+                r"Key=.*Theme",  # Theme keys
+                r"^[A-Za-z]+Brush$",  # Brush names
+                r"^[A-Za-z]+Color$",  # Color names
+                r"primarybrush", r"secondarybrush", r"accentbrush",  # Common UI brushes
+                r"primary", r"secondary", r"accent", r"background", r"foreground"  # UI colors
+            ],
+            "bitcoin_private_key": [
+                r"SDWARF",  # Go/Assembly constants
+                r"DWARF",   # Debug format constants
+                r"CUINFO",  # Compilation unit info
+                r"FCNSDW",  # Function symbols
+                r"ABSFCN",  # Abstract functions
+                r"SYMKIND", # Symbol kinds
+                r"[A-Z]{20,}",  # Long uppercase constants (likely not Bitcoin keys)
+                r"^[A-Z_]+$"    # Pure uppercase with underscores
             ]
         }
         
@@ -319,6 +350,47 @@ class SecurityPatternDetector:
             for fp_pattern in false_positive_patterns[pattern_name]:
                 if re.search(fp_pattern, matched_text, re.IGNORECASE):
                     return True
+        
+        return False
+    
+    def _is_context_false_positive(self, matched_text: str, pattern_name: str, file_ext: str, line_content: str) -> bool:
+        """Context-aware false positive filtering based on file type and line content."""
+        
+        # XAML/XML specific filtering
+        if file_ext in ['xaml', 'xml', 'axaml']:
+            # Skip XAML resource keys and property definitions
+            if pattern_name == "secret_env_var":
+                if any(keyword in line_content for keyword in [
+                    'Key=', 'x:Key=', 'Name=', 'TargetName=', 
+                    '<ResourceDictionary', '<Style', '<SolidColorBrush',
+                    'Brush"', 'Color"', 'Style"', 'Theme"'
+                ]):
+                    return True
+        
+        # Go source file filtering
+        if file_ext == 'go':
+            # Skip Go constants and string literals
+            if pattern_name == "bitcoin_private_key":
+                if any(keyword in line_content for keyword in [
+                    'const', 'var', 'string', '=', 'DWARF', 'objabi', 
+                    'symkind', '_string.go', 'golang'
+                ]):
+                    return True
+        
+        # Assembly and object files
+        if file_ext in ['s', 'asm', 'S']:
+            if pattern_name in ["bitcoin_private_key", "high_entropy_string"]:
+                return True  # Skip assembly files entirely for these patterns
+        
+        # Configuration files - be more careful
+        if file_ext in ['json', 'yaml', 'yml', 'toml', 'ini']:
+            # But allow scanning, just be more specific about what we flag
+            pass
+        
+        # Minified files - high entropy is expected
+        if any(keyword in file_ext for keyword in ['min.js', 'min.css', '.min.']):
+            if pattern_name == "high_entropy_string":
+                return True
         
         return False
     
