@@ -558,7 +558,7 @@ class RepositoryFrame(ttk.Frame):
         self.repo_status_label.config(text=f"❌ Failed to load repositories: {error}")
         self.load_button.config(state='normal')
         self.refresh_button.config(state='normal')
-        ErrorHandler.show_error(self.parent, error, "repository_loading")
+        ErrorHandler.show_error(self.winfo_toplevel(), error, "repository_loading")
     
     def refresh_repository_list(self):
         """Refresh the repository list display."""
@@ -1067,7 +1067,7 @@ class ScanProgressFrame(ttk.Frame):
         self.cancel_button.config(text="Close", state='normal')
         # Create an exception object from the error message for better error handling
         error = Exception(error_message)
-        ErrorHandler.show_error(self.parent, error, "scanning")
+        ErrorHandler.show_error(self.winfo_toplevel(), error, "scanning")
     
     def pause_scan(self):
         """Pause or resume the scan."""
@@ -1504,7 +1504,7 @@ Recommendations:
                 
                 messagebox.showinfo("Success", f"CSV report exported to {filename}")
             except Exception as e:
-                ErrorHandler.show_error(self.parent, e, "csv_export")
+                ErrorHandler.show_error(self.winfo_toplevel(), e, "csv_export")
     
     def export_json(self):
         """Export results to JSON."""
@@ -1541,7 +1541,7 @@ Recommendations:
                 
                 messagebox.showinfo("Success", f"JSON report exported to {filename}")
             except Exception as e:
-                ErrorHandler.show_error(self.parent, e, "json_export")
+                ErrorHandler.show_error(self.winfo_toplevel(), e, "json_export")
     
     def export_html(self):
         """Export results to HTML."""
@@ -1635,7 +1635,7 @@ Scan completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                 messagebox.showinfo("Success", f"Results exported to {filename}")
                 get_logger().info(f"Results exported to CSV: {filename}", "EXPORT")
             except Exception as e:
-                ErrorHandler.show_error(self.parent, e, "csv_export")
+                ErrorHandler.show_error(self.winfo_toplevel(), e, "csv_export")
                 get_logger().error(f"CSV export failed: {e}", "EXPORT", e)
     
     def export_json(self):
@@ -1669,7 +1669,7 @@ Scan completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                 messagebox.showinfo("Success", f"Results exported to {filename}")
                 get_logger().info(f"Results exported to JSON: {filename}", "EXPORT")
             except Exception as e:
-                ErrorHandler.show_error(self.parent, e, "json_export")
+                ErrorHandler.show_error(self.winfo_toplevel(), e, "json_export")
                 get_logger().error(f"JSON export failed: {e}", "EXPORT", e)
     
     def export_html(self):
@@ -1701,7 +1701,7 @@ Scan completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                     webbrowser.open(f"file://{os.path.abspath(filename)}")
                     
             except Exception as e:
-                ErrorHandler.show_error(self.parent, e, "html_export")
+                ErrorHandler.show_error(self.winfo_toplevel(), e, "html_export")
                 get_logger().error(f"HTML export failed: {e}", "EXPORT", e)
     
     def _generate_html_report(self):
