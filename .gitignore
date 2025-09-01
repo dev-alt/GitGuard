@@ -25,10 +25,14 @@ scan_results/
 cache/
 reports/
 exports/
+output/
 .gitguard_cache/
 temp_scan_data/
 user_data/
 saved_scans/
+config/scan_cache/
+config/auth_cache.json
+config/gitguard_settings.json
 
 # Application Logs
 logs/

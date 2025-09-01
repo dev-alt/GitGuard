@@ -326,6 +326,28 @@ class SecurityPatternDetector:
     
     def is_high_risk_file(self, file_path: str) -> bool:
         """Check if file path matches high-risk patterns."""
+        # First check for safe development files that should be excluded
+        safe_dev_files = [
+            r"launchSettings\.json$",      # Visual Studio launch settings
+            r"appsettings\.json$",         # ASP.NET Core app settings
+            r"appsettings\.[^.]+\.json$",  # Environment-specific app settings
+            r"Properties/.*\.json$",       # .NET project properties
+            r"project\.json$",             # .NET Core project files
+            r"package\.json$",             # Node.js package files
+            r"tsconfig\.json$",            # TypeScript config
+            r"jsconfig\.json$",            # JavaScript config
+            r"eslint\.json$",              # ESLint config
+            r"\.vscode/.*\.json$",         # VS Code settings
+            r"AndroidManifest\.xml$",      # Android manifest
+            r"Info\.plist$",               # iOS info plist
+        ]
+        
+        # Check if it's a safe development file
+        for safe_pattern in safe_dev_files:
+            if re.search(safe_pattern, file_path, re.IGNORECASE):
+                return False
+        
+        # Check against high-risk patterns
         for pattern in self.high_risk_files:
             if re.search(pattern, file_path, re.IGNORECASE):
                 return True

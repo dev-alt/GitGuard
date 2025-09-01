@@ -1488,10 +1488,17 @@ Recommendations:
             messagebox.showwarning("Warning", "No results to export")
             return
         
+        # Default to output folder
+        default_filename = f"gitguard_scan_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'output')
+        os.makedirs(output_dir, exist_ok=True)
+        
         filename = filedialog.asksaveasfilename(
             defaultextension=".csv",
             filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
-            title="Export CSV Report"
+            title="Export CSV Report",
+            initialdir=output_dir,
+            initialfile=default_filename
         )
         
         if filename:
@@ -1523,10 +1530,17 @@ Recommendations:
             messagebox.showwarning("Warning", "No results to export")
             return
         
+        # Default to output folder
+        default_filename = f"gitguard_scan_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'output')
+        os.makedirs(output_dir, exist_ok=True)
+        
         filename = filedialog.asksaveasfilename(
             defaultextension=".json",
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-            title="Export JSON Report"
+            title="Export JSON Report",
+            initialdir=output_dir,
+            initialfile=default_filename
         )
         
         if filename:
@@ -1689,10 +1703,17 @@ Scan completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
             messagebox.showwarning("No Data", "No scan results to export.")
             return
         
+        # Default to output folder
+        default_filename = f"gitguard_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+        output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'output')
+        os.makedirs(output_dir, exist_ok=True)
+        
         filename = filedialog.asksaveasfilename(
             defaultextension=".html",
             filetypes=[("HTML files", "*.html"), ("All files", "*.*")],
-            title="Export HTML Report"
+            title="Export HTML Report",
+            initialdir=output_dir,
+            initialfile=default_filename
         )
         
         if filename:
