@@ -939,16 +939,19 @@ class ScanProgressFrame(ttk.Frame):
                 findings = []
                 cached_repos = []
                 
+                # Create a working copy of scan_config
+                working_scan_config = scan_config.copy()
+                
                 if use_cache:
                     # Try to get cached results first
                     cache = get_cache()
-                    repositories = scan_config.get('repositories', [])
+                    repositories = working_scan_config.get('repositories', [])
                     
                     for repo_name in repositories:
                         try:
                             # Get repository object for cache validation
                             repo_obj = github_client.get_repo(repo_name)
-                            cached_results = cache.get_cached_results(repo_name, repo_obj, scan_config)
+                            cached_results = cache.get_cached_results(repo_name, repo_obj, working_scan_config)
                             
                             if cached_results:
                                 findings.extend(cached_results)
@@ -960,8 +963,7 @@ class ScanProgressFrame(ttk.Frame):
                     
                     # Remove cached repos from scan config
                     remaining_repos = [repo for repo in repositories if repo not in cached_repos]
-                    scan_config = scan_config.copy()
-                    scan_config['repositories'] = remaining_repos
+                    working_scan_config['repositories'] = remaining_repos
                     
                     # Update progress for cached results
                     if cached_repos:
@@ -969,18 +971,18 @@ class ScanProgressFrame(ttk.Frame):
                         self.after(0, lambda: self._update_status(progress_msg))
                 
                 # Scan remaining repositories
-                if scan_config.get('repositories'):
-                    new_findings = self.scanner.scan_repositories(scan_config)
+                if working_scan_config.get('repositories'):
+                    new_findings = self.scanner.scan_repositories(working_scan_config)
                     findings.extend(new_findings)
                     
                     # Cache the new results if caching is enabled
                     if use_cache:
                         cache = get_cache()
-                        for repo_name in scan_config['repositories']:
+                        for repo_name in working_scan_config['repositories']:
                             try:
                                 repo_obj = github_client.get_repo(repo_name)
                                 repo_findings = [f for f in new_findings if f.get('repository') == repo_name]
-                                cache.store_results(repo_name, repo_obj, scan_config, repo_findings)
+                                cache.store_results(repo_name, repo_obj, working_scan_config, repo_findings)
                             except Exception as e:
                                 get_logger().debug(f"Failed to cache results for {repo_name}: {e}", "SCAN")
                 
@@ -989,8 +991,8 @@ class ScanProgressFrame(ttk.Frame):
                 # Update scan summary with cache info
                 if use_cache and cached_repos:
                     summary['cached_repositories'] = len(cached_repos)
-                    summary['scanned_repositories'] = len(scan_config.get('repositories', []))
-                    summary['total_repositories'] = len(cached_repos) + len(scan_config.get('repositories', []))
+                    summary['scanned_repositories'] = len(working_scan_config.get('repositories', []))
+                    summary['total_repositories'] = len(cached_repos) + len(working_scan_config.get('repositories', []))
                 
                 # Update UI on main thread
                 self.after(0, lambda: self._on_scan_complete(findings, summary))
