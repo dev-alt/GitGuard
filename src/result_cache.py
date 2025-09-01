@@ -46,9 +46,17 @@ class ResultCache:
     
     def _get_repo_cache_key(self, repo_full_name: str, scan_config: Dict[str, Any]) -> str:
         """Generate a unique cache key for a repository scan."""
+        # Create a serializable version of scan config (exclude GitHub objects)
+        cache_config = {
+            'scan_depth': scan_config.get('scan_depth', 'current'),
+            'max_commits': scan_config.get('max_commits', 100),
+            'include_files': scan_config.get('include_files', []),
+            'single_repo_mode': scan_config.get('single_repo_mode', False)
+        }
+        
         # Include scan configuration in the key to handle different scan types
         config_hash = hashlib.md5(
-            json.dumps(scan_config, sort_keys=True).encode('utf-8')
+            json.dumps(cache_config, sort_keys=True).encode('utf-8')
         ).hexdigest()[:8]
         
         # Clean repo name for filesystem
@@ -132,11 +140,19 @@ class ResultCache:
                 cache_key = self._get_repo_cache_key(repo_full_name, scan_config)
                 cache_file = self._get_cache_file_path(cache_key)
                 
+                # Create a serializable version of scan config (exclude GitHub objects)
+                serializable_config = {
+                    'scan_depth': scan_config.get('scan_depth', 'current'),
+                    'max_commits': scan_config.get('max_commits', 100),
+                    'include_files': scan_config.get('include_files', []),
+                    'single_repo_mode': scan_config.get('single_repo_mode', False)
+                }
+                
                 # Prepare cache data
                 cache_data = {
                     'repo_full_name': repo_full_name,
                     'scan_date': datetime.now().isoformat(),
-                    'scan_config': scan_config,
+                    'scan_config': serializable_config,
                     'last_commit_hash': self._get_repo_last_commit_hash(repo_obj),
                     'result_count': len(results),
                     'results': results

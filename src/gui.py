@@ -696,7 +696,7 @@ class RepositoryFrame(ttk.Frame):
         # Get scan configuration
         scan_config = {
             'repositories': selected_repos,
-            'scan_depth': self.scan_depth.get(),
+            'scan_depth': self._translate_scan_depth(self.scan_depth.get()),
             'max_commits': int(self.max_commits_var.get()),
             'include_files': self.include_files.get().split(','),
             'auth_data': self.auth_data
@@ -704,6 +704,15 @@ class RepositoryFrame(ttk.Frame):
         
         # Notify parent to start scan
         self.on_scan_start(scan_config)
+    
+    def _translate_scan_depth(self, depth_display):
+        """Translate user-friendly scan depth to internal value."""
+        depth_mapping = {
+            "Surface (latest commit)": "current",
+            "Deep (full history)": "history",
+            "Custom": "custom"
+        }
+        return depth_mapping.get(depth_display, "history")  # Default to history for better scanning
     
     def scan_selected_repo(self):
         """Scan the currently selected repository directly."""
@@ -719,7 +728,7 @@ class RepositoryFrame(ttk.Frame):
         # Get scan configuration
         scan_config = {
             'repositories': [repo_full_name],
-            'scan_depth': self.scan_depth.get(),
+            'scan_depth': self._translate_scan_depth(self.scan_depth.get()),
             'max_commits': int(self.max_commits_var.get()),
             'include_files': self.include_files.get().split(','),
             'auth_data': self.auth_data,
