@@ -2,13 +2,13 @@
   "gui": {
     "window_geometry": "1200x800+423+332",
     "window_maximized": false,
-    "remember_auth": false,
-    "auto_load_repos": false,
+    "remember_auth": true,
+    "auto_load_repos": true,
     "confirm_destructive_actions": true
   },
   "scanning": {
     "max_commits": 100,
-    "scan_depth": "current",
+    "scan_depth": "history",
     "exclude_build_folders": true,
     "exclude_dependencies": true,
     "parallel_scanning": true,
@@ -21,7 +21,7 @@
     "custom_patterns_enabled": true
   },
   "export": {
-    "default_format": "csv",
+    "default_format": "html",
     "include_low_risk": false,
     "include_file_content": true,
     "auto_timestamp_files": true

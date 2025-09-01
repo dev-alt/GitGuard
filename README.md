@@ -9,7 +9,7 @@ A desktop GUI application for scanning GitHub repositories and commit history to
 ## Features
 
 - **Comprehensive Scanning**: Analyzes entire repository history including all commits
-- **Advanced Pattern Detection**: Identifies 26+ types of sensitive data with intelligent filtering
+- **Advanced Pattern Detection**: Identifies 37+ types of sensitive data with intelligent filtering
 - **Professional GUI**: User-friendly Tkinter interface with 4-tab workflow and menu system
 - **False Positive Elimination**: Context-aware filtering for XAML, Go, assembly, and minified files
 - **High-Performance Scanning**: 10x faster with batch processing and smart file prioritization
@@ -19,6 +19,8 @@ A desktop GUI application for scanning GitHub repositories and commit history to
 - **Risk Assessment**: Automatic risk scoring with color-coded visualization
 - **Settings Management**: Persistent configuration with 5-category settings dialog
 - **Comprehensive Logging**: Full application logging with session tracking and performance metrics
+- **Custom Pattern Editor**: GUI-based creation and management of custom detection rules
+- **Advanced Error Handling**: Smart error dialogs with context-aware suggestions and technical details
 - **Enterprise Features**: Menu system, settings import/export, authentication caching
 
 ## Detected Sensitive Data Types
@@ -26,8 +28,16 @@ A desktop GUI application for scanning GitHub repositories and commit history to
 ### API Keys & Tokens
 - AWS Access Keys (`AKIA[0-9A-Z]{16}`)
 - GitHub Personal Access Tokens (`ghp_[a-zA-Z0-9]{36}`)
+- Google API Keys, Firebase Keys
+- Stripe API Keys (`sk_live_`, `sk_test_`)
+- SendGrid API Keys (`SG.`)
+- Twilio API Keys (`AC[a-f0-9]{32}`)
+- Square API Keys (`sq0`)
+- PayPal Client Secrets (`EO`)
+- Shopify API Tokens (`shpat_`)
 - Generic API Keys and Tokens
 - OAuth Tokens and Bearer Tokens
+- JWT Tokens (JSON Web Tokens)
 
 ### Database Credentials
 - Connection strings (MongoDB, MySQL, PostgreSQL, Redis)
@@ -49,7 +59,16 @@ A desktop GUI application for scanning GitHub repositories and commit history to
 - `.env` and `.env.*` files
 - `config.json`, `settings.json` files
 - Docker Compose files with secrets
+- Docker Secrets and Kubernetes Secrets
+- Azure Storage Connection Strings
 - Database configuration files
+
+### Cloud & DevOps Secrets
+- Azure Storage Keys and Connection Strings
+- Google Cloud Service Account Keys
+- Docker Environment Secrets
+- Kubernetes Secret Manifests
+- High-Entropy Strings (Base64 encoded secrets)
 
 ## Installation
 
@@ -140,6 +159,52 @@ GitGuard offers comprehensive export capabilities:
    - Excludes build folders and dependencies
    - Focuses on high-risk files and patterns
    - Perfect for comprehensive security audits
+
+#### Custom Pattern Creation 🎨
+GitGuard now includes a powerful GUI-based custom pattern editor:
+
+**🔧 Pattern Editor Features:**
+- **Visual Pattern Creation**: Point-and-click interface for creating detection rules
+- **Regex Testing**: Built-in regex testing with real-time validation
+- **Risk Level Assignment**: Set appropriate risk levels (Low, Medium, High, Critical)
+- **Pattern Management**: Save, load, edit, and delete custom patterns
+- **JSON Export/Import**: Share patterns across installations
+
+**Creating Custom Patterns:**
+1. **Access**: Menu → Tools → 🎨 Custom Patterns...
+2. **Create**: Click "Add New Pattern" and fill in the form
+3. **Test**: Use the built-in regex tester to validate your pattern
+4. **Save**: Patterns are automatically saved and used in future scans
+
+**Example Custom Pattern:**
+```
+Name: Internal API Key
+Description: Company-specific API key format
+Pattern: MYCO_API_[A-Za-z0-9]{32}
+Risk Level: HIGH
+```
+
+#### Enhanced Error Handling 🛠️
+GitGuard now provides intelligent error handling with user guidance:
+
+**🚨 Smart Error Dialogs:**
+- **Context-Aware Suggestions**: Specific solutions for different error types
+- **Help Integration**: Direct links to relevant documentation
+- **Technical Details**: Collapsible technical information for debugging
+- **Copy Support**: One-click copying of error details for support requests
+
+**Error Categories with Intelligent Suggestions:**
+- **Authentication Errors**: Token validation, permission guidance, renewal instructions
+- **API Errors**: Rate limit handling, repository access, GitHub connectivity
+- **File Errors**: Permission issues, export location problems, file access
+- **Network Errors**: Connectivity troubleshooting, proxy configuration
+- **Data Errors**: Configuration fixes, format validation, cache clearing
+
+**User-Friendly Features:**
+- 📋 **Copy Details**: Copy technical information to clipboard
+- 📖 **Get Help**: Direct links to relevant documentation sections
+- 🔽 **Show/Hide Details**: Collapsible technical information
+- ✨ **Smart Categorization**: Automatic error type detection with appropriate suggestions
 
 ## Security and Privacy
 
@@ -237,13 +302,15 @@ GitGuard/
 ✅ **ENTERPRISE-GRADE - Production Ready:**
 - Complete real GitHub authentication with Personal Access Token and legacy username/password support
 - Live repository loading from GitHub API with advanced filtering, search, and auto-scan modes
-- 26+ intelligent security pattern detection engine with context-aware filtering
+- 37+ intelligent security pattern detection engine with context-aware filtering
 - High-performance repository scanning with batch processing and file prioritization
 - Multi-threaded scanning with pause/resume/cancel and real-time progress tracking
 - Professional 4-tab GUI workflow with comprehensive menu system and settings dialog
 - Multi-format export suite: CSV, JSON, and professional HTML reports with statistics
 - Enterprise logging system with session tracking, performance metrics, and audit trails
 - Settings persistence with 5-category configuration management
+- **🎨 NEW**: Custom pattern editor with GUI-based rule creation and regex testing
+- **🎨 NEW**: Advanced error handling with smart suggestions and technical support features
 
 🎯 **Advanced Security Scanning Capabilities:**
 - **False Positive Elimination**: Context-aware filtering for XAML, Go, assembly, and framework files
@@ -282,7 +349,16 @@ GitGuard/
 - **Onboarding Reviews**: Scan inherited or acquired codebases
 - **Periodic Security Health Checks**: Monthly/quarterly repository assessments
 
-### Recent Updates (Session 5) - LATEST! 🚀
+### Recent Updates (Session 6) - LATEST! 🚀
+
+🎨 **User Experience & Polish Improvements:**
+- ✅ **Custom Pattern Editor**: Complete GUI-based custom pattern creation and management
+- ✅ **Advanced Error Handling**: Smart error dialogs with context-aware suggestions and help links
+- ✅ **Enhanced User Guidance**: Actionable solutions for authentication, API, file, and network errors
+- ✅ **Technical Support Features**: Copy error details, collapsible technical information, direct help integration
+- ✅ **Professional Error Management**: Centralized error handling with intelligent categorization
+
+### Previous Updates (Session 5) - Major Performance & Accuracy! 
 
 🎯 **Major Accuracy & Performance Improvements:**
 - ✅ **False Positive Elimination**: Intelligent filtering for XAML/XML UI elements, Go constants, and assembly files

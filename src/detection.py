@@ -186,6 +186,83 @@ class SecurityPatternDetector:
                 "description": "Database connection string with hardcoded credentials"
             },
             
+            # JWT Tokens
+            "jwt_token": {
+                "pattern": r"eyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*",
+                "risk": RiskLevel.HIGH,
+                "description": "JWT (JSON Web Token) detected"
+            },
+            
+            # Stripe API Keys
+            "stripe_api_key": {
+                "pattern": r"sk_(live|test)_[0-9a-zA-Z]{24}",
+                "risk": RiskLevel.CRITICAL,
+                "description": "Stripe API key detected"
+            },
+            
+            # Firebase Keys
+            "firebase_api_key": {
+                "pattern": r"AIza[0-9A-Za-z\\-_]{35}",
+                "risk": RiskLevel.HIGH,
+                "description": "Firebase API key detected"
+            },
+            
+            # SendGrid API Keys
+            "sendgrid_api_key": {
+                "pattern": r"SG\.[0-9A-Za-z\\-_]{22}\.[0-9A-Za-z\\-_]{43}",
+                "risk": RiskLevel.HIGH,
+                "description": "SendGrid API key detected"
+            },
+            
+            # Twilio API Keys
+            "twilio_api_key": {
+                "pattern": r"AC[a-f0-9]{32}",
+                "risk": RiskLevel.HIGH,
+                "description": "Twilio API key detected"
+            },
+            
+            # Azure Storage Keys
+            "azure_storage_key": {
+                "pattern": r"DefaultEndpointsProtocol=https;AccountName=[^;]+;AccountKey=[A-Za-z0-9+/]{88}==",
+                "risk": RiskLevel.CRITICAL,
+                "description": "Azure storage connection string detected"
+            },
+            
+            # Shopify API Keys
+            "shopify_api_key": {
+                "pattern": r"shpat_[a-fA-F0-9]{32}",
+                "risk": RiskLevel.HIGH,
+                "description": "Shopify API token detected"
+            },
+            
+            # Square API Keys
+            "square_api_key": {
+                "pattern": r"sq0[a-z]{3}-[0-9A-Za-z\\-_]{22,43}",
+                "risk": RiskLevel.HIGH,
+                "description": "Square API key detected"
+            },
+            
+            # PayPal Client Secrets
+            "paypal_client_secret": {
+                "pattern": r"EO[0-9A-Za-z\\-_]{21,32}",
+                "risk": RiskLevel.CRITICAL,
+                "description": "PayPal client secret detected"
+            },
+            
+            # Docker Secrets
+            "docker_secret": {
+                "pattern": r"--secret\\s+id=[a-zA-Z0-9_-]+",
+                "risk": RiskLevel.MEDIUM,
+                "description": "Docker secret reference detected"
+            },
+            
+            # Kubernetes Secrets
+            "kubernetes_secret": {
+                "pattern": r"kind:\\s*Secret",
+                "risk": RiskLevel.MEDIUM,
+                "description": "Kubernetes secret manifest detected"
+            },
+            
             # Generic high entropy strings (potential secrets)
             "high_entropy_string": {
                 "pattern": r"['\"][a-zA-Z0-9+/]{40,}={0,2}['\"]",

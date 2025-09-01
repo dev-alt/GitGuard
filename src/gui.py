@@ -7,11 +7,14 @@ Includes authentication, repository selection, scanning, and results display.
 """
 
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox, filedialog, scrolledtext
 import threading
 import time
 import os
 import json
+import sys
+import traceback
+import webbrowser
 from typing import Dict, List, Optional
 from datetime import datetime
 try:
@@ -292,7 +295,7 @@ class AuthenticationFrame(ttk.Frame):
         """Handle authentication error."""
         self.status_label.config(text=f"❌ Authentication failed: {error}")
         self.login_button.config(state='normal')
-        messagebox.showerror("Authentication Failed", f"Failed to authenticate:\n{error}")
+        ErrorHandler.show_error(self.root, error, "authentication")
 
 
 class RepositoryFrame(ttk.Frame):
@@ -547,7 +550,7 @@ class RepositoryFrame(ttk.Frame):
         self.repo_status_label.config(text=f"❌ Failed to load repositories: {error}")
         self.load_button.config(state='normal')
         self.refresh_button.config(state='normal')
-        messagebox.showerror("Error", f"Failed to load repositories:\n{error}")
+        ErrorHandler.show_error(self.parent, error, "repository_loading")
     
     def refresh_repository_list(self):
         """Refresh the repository list display."""
@@ -970,6 +973,9 @@ class ScanProgressFrame(ttk.Frame):
         self.is_scanning = False
         self.status_label.config(text=f"❌ Scan failed: {error_message}")
         self.cancel_button.config(text="Close", state='normal')
+        # Create an exception object from the error message for better error handling
+        error = Exception(error_message)
+        ErrorHandler.show_error(self.parent, error, "scanning")
     
     def pause_scan(self):
         """Pause or resume the scan."""
@@ -1406,7 +1412,7 @@ Recommendations:
                 
                 messagebox.showinfo("Success", f"CSV report exported to {filename}")
             except Exception as e:
-                messagebox.showerror("Error", f"Failed to export CSV: {e}")
+                ErrorHandler.show_error(self.parent, e, "csv_export")
     
     def export_json(self):
         """Export results to JSON."""
@@ -1443,7 +1449,7 @@ Recommendations:
                 
                 messagebox.showinfo("Success", f"JSON report exported to {filename}")
             except Exception as e:
-                messagebox.showerror("Error", f"Failed to export JSON: {e}")
+                ErrorHandler.show_error(self.parent, e, "json_export")
     
     def export_html(self):
         """Export results to HTML."""
@@ -1537,7 +1543,7 @@ Scan completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                 messagebox.showinfo("Success", f"Results exported to {filename}")
                 get_logger().info(f"Results exported to CSV: {filename}", "EXPORT")
             except Exception as e:
-                messagebox.showerror("Error", f"Failed to export CSV: {e}")
+                ErrorHandler.show_error(self.parent, e, "csv_export")
                 get_logger().error(f"CSV export failed: {e}", "EXPORT", e)
     
     def export_json(self):
@@ -1571,7 +1577,7 @@ Scan completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                 messagebox.showinfo("Success", f"Results exported to {filename}")
                 get_logger().info(f"Results exported to JSON: {filename}", "EXPORT")
             except Exception as e:
-                messagebox.showerror("Error", f"Failed to export JSON: {e}")
+                ErrorHandler.show_error(self.parent, e, "json_export")
                 get_logger().error(f"JSON export failed: {e}", "EXPORT", e)
     
     def export_html(self):
@@ -1603,7 +1609,7 @@ Scan completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                     webbrowser.open(f"file://{os.path.abspath(filename)}")
                     
             except Exception as e:
-                messagebox.showerror("Error", f"Failed to export HTML: {e}")
+                ErrorHandler.show_error(self.parent, e, "html_export")
                 get_logger().error(f"HTML export failed: {e}", "EXPORT", e)
     
     def _generate_html_report(self):
@@ -1873,6 +1879,523 @@ Scan completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
 </html>"""
         
         return html_template
+
+
+class CustomPatternEditor:
+    """Dialog for creating and editing custom detection patterns."""
+    
+    def __init__(self, parent):
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title("🎨 Custom Pattern Editor")
+        self.dialog.geometry("700x500")
+        self.dialog.resizable(True, True)
+        self.dialog.transient(parent)
+        self.dialog.grab_set()
+        
+        # Center the dialog
+        parent.update_idletasks()
+        x = parent.winfo_x() + (parent.winfo_width() // 2) - 350
+        y = parent.winfo_y() + (parent.winfo_height() // 2) - 250
+        self.dialog.geometry(f"+{x}+{y}")
+        
+        self.patterns = self._load_custom_patterns()
+        self.create_widgets()
+    
+    def create_widgets(self):
+        """Create pattern editor interface."""
+        # Header
+        header_frame = ttk.Frame(self.dialog)
+        header_frame.pack(fill='x', padx=10, pady=10)
+        
+        ttk.Label(header_frame, text="🎨 Custom Detection Patterns", 
+                 font=('Arial', 14, 'bold')).pack()
+        ttk.Label(header_frame, text="Create your own patterns to detect specific secrets or sensitive data", 
+                 font=('Arial', 9), foreground='gray').pack(pady=5)
+        
+        # Pattern list and editor
+        main_frame = ttk.Frame(self.dialog)
+        main_frame.pack(fill='both', expand=True, padx=10, pady=5)
+        
+        # Left side: Pattern list
+        list_frame = ttk.LabelFrame(main_frame, text="Existing Custom Patterns")
+        list_frame.pack(side='left', fill='both', expand=True, padx=(0, 5))
+        
+        # Pattern listbox
+        list_container = ttk.Frame(list_frame)
+        list_container.pack(fill='both', expand=True, padx=5, pady=5)
+        
+        self.pattern_listbox = tk.Listbox(list_container, height=15)
+        self.pattern_listbox.pack(side='left', fill='both', expand=True)
+        
+        list_scroll = ttk.Scrollbar(list_container, orient='vertical', command=self.pattern_listbox.yview)
+        list_scroll.pack(side='right', fill='y')
+        self.pattern_listbox.config(yscrollcommand=list_scroll.set)
+        
+        # Bind selection
+        self.pattern_listbox.bind('<<ListboxSelect>>', self.on_pattern_select)
+        
+        # List buttons
+        list_btn_frame = ttk.Frame(list_frame)
+        list_btn_frame.pack(fill='x', padx=5, pady=5)
+        
+        ttk.Button(list_btn_frame, text="➕ New", command=self.new_pattern).pack(side='left', padx=2)
+        ttk.Button(list_btn_frame, text="🗑️ Delete", command=self.delete_pattern).pack(side='left', padx=2)
+        
+        # Right side: Pattern editor
+        editor_frame = ttk.LabelFrame(main_frame, text="Pattern Details")
+        editor_frame.pack(side='right', fill='both', expand=True, padx=(5, 0))
+        
+        # Pattern form
+        form_frame = ttk.Frame(editor_frame)
+        form_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        
+        # Name
+        ttk.Label(form_frame, text="Pattern Name:").grid(row=0, column=0, sticky='w', pady=5)
+        self.name_entry = ttk.Entry(form_frame, width=30)
+        self.name_entry.grid(row=0, column=1, sticky='ew', pady=5, padx=(5, 0))
+        
+        # Description
+        ttk.Label(form_frame, text="Description:").grid(row=1, column=0, sticky='w', pady=5)
+        self.desc_entry = ttk.Entry(form_frame, width=30)
+        self.desc_entry.grid(row=1, column=1, sticky='ew', pady=5, padx=(5, 0))
+        
+        # Risk Level
+        ttk.Label(form_frame, text="Risk Level:").grid(row=2, column=0, sticky='w', pady=5)
+        self.risk_var = tk.StringVar(value="MEDIUM")
+        risk_combo = ttk.Combobox(form_frame, textvariable=self.risk_var, 
+                                 values=["CRITICAL", "HIGH", "MEDIUM", "LOW"], 
+                                 state="readonly", width=27)
+        risk_combo.grid(row=2, column=1, sticky='w', pady=5, padx=(5, 0))
+        
+        # Pattern (regex)
+        ttk.Label(form_frame, text="Regex Pattern:").grid(row=3, column=0, sticky='nw', pady=5)
+        pattern_frame = ttk.Frame(form_frame)
+        pattern_frame.grid(row=3, column=1, sticky='ew', pady=5, padx=(5, 0))
+        
+        self.pattern_text = tk.Text(pattern_frame, height=3, width=40, wrap='word')
+        self.pattern_text.pack(fill='both', expand=True)
+        
+        # Test section
+        test_frame = ttk.LabelFrame(form_frame, text="Test Pattern")
+        test_frame.grid(row=4, column=0, columnspan=2, sticky='ew', pady=10, padx=0)
+        
+        ttk.Label(test_frame, text="Test Text:").pack(anchor='w', padx=5, pady=2)
+        self.test_text = tk.Text(test_frame, height=3, wrap='word')
+        self.test_text.pack(fill='x', padx=5, pady=2)
+        
+        test_btn_frame = ttk.Frame(test_frame)
+        test_btn_frame.pack(fill='x', padx=5, pady=5)
+        
+        ttk.Button(test_btn_frame, text="🧪 Test Pattern", command=self.test_pattern).pack(side='left')
+        self.test_result_label = ttk.Label(test_btn_frame, text="", foreground='blue')
+        self.test_result_label.pack(side='left', padx=10)
+        
+        # Configure grid weights
+        form_frame.columnconfigure(1, weight=1)
+        test_frame.columnconfigure(0, weight=1)
+        
+        # Bottom buttons
+        button_frame = ttk.Frame(self.dialog)
+        button_frame.pack(fill='x', padx=10, pady=10)
+        
+        ttk.Button(button_frame, text="💾 Save Pattern", 
+                  command=self.save_current_pattern).pack(side='left', padx=5)
+        
+        ttk.Frame(button_frame).pack(side='left', expand=True)  # Spacer
+        
+        ttk.Button(button_frame, text="Cancel", 
+                  command=self.dialog.destroy).pack(side='right', padx=5)
+        ttk.Button(button_frame, text="✅ Save All & Close", 
+                  command=self.save_and_close).pack(side='right')
+        
+        # Load patterns into list
+        self.refresh_pattern_list()
+    
+    def _load_custom_patterns(self):
+        """Load custom patterns from settings."""
+        try:
+            settings_file = get_settings().config_dir / 'custom_patterns.json'
+            if settings_file.exists():
+                with open(settings_file, 'r') as f:
+                    return json.load(f)
+        except Exception as e:
+            get_logger().error(f"Failed to load custom patterns: {e}", "PATTERNS")
+        
+        # Return default examples
+        return [
+            {
+                "name": "Internal API Key",
+                "description": "Company-specific API key pattern",
+                "pattern": "INTERNAL_API_[A-Za-z0-9]{32}",
+                "risk": "HIGH"
+            },
+            {
+                "name": "Database Connection String",
+                "description": "Custom database connection format",
+                "pattern": "db://[^:]+:[^@]+@[^/]+/\\w+",
+                "risk": "CRITICAL"
+            }
+        ]
+    
+    def _save_custom_patterns(self):
+        """Save custom patterns to file."""
+        try:
+            settings_file = get_settings().config_dir / 'custom_patterns.json'
+            with open(settings_file, 'w') as f:
+                json.dump(self.patterns, f, indent=2)
+            get_logger().info(f"Saved {len(self.patterns)} custom patterns", "PATTERNS")
+        except Exception as e:
+            get_logger().error(f"Failed to save custom patterns: {e}", "PATTERNS")
+            ErrorHandler.show_error(self.dialog, e, "custom_patterns")
+    
+    def refresh_pattern_list(self):
+        """Refresh the pattern list display."""
+        self.pattern_listbox.delete(0, tk.END)
+        for i, pattern in enumerate(self.patterns):
+            risk_icon = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}.get(pattern['risk'], "⚪")
+            self.pattern_listbox.insert(tk.END, f"{risk_icon} {pattern['name']}")
+    
+    def on_pattern_select(self, event=None):
+        """Handle pattern selection."""
+        selection = self.pattern_listbox.curselection()
+        if not selection:
+            return
+        
+        pattern = self.patterns[selection[0]]
+        
+        # Populate form
+        self.name_entry.delete(0, tk.END)
+        self.name_entry.insert(0, pattern['name'])
+        
+        self.desc_entry.delete(0, tk.END)
+        self.desc_entry.insert(0, pattern['description'])
+        
+        self.risk_var.set(pattern['risk'])
+        
+        self.pattern_text.delete(1.0, tk.END)
+        self.pattern_text.insert(1.0, pattern['pattern'])
+    
+    def new_pattern(self):
+        """Create a new pattern."""
+        new_pattern = {
+            "name": "New Pattern",
+            "description": "Description of what this pattern detects",
+            "pattern": "your_regex_pattern_here",
+            "risk": "MEDIUM"
+        }
+        self.patterns.append(new_pattern)
+        self.refresh_pattern_list()
+        
+        # Select the new pattern
+        self.pattern_listbox.selection_set(len(self.patterns) - 1)
+        self.on_pattern_select()
+    
+    def delete_pattern(self):
+        """Delete selected pattern."""
+        selection = self.pattern_listbox.curselection()
+        if not selection:
+            return
+        
+        if messagebox.askyesno("Delete Pattern", "Are you sure you want to delete this pattern?"):
+            del self.patterns[selection[0]]
+            self.refresh_pattern_list()
+            
+            # Clear form
+            self.name_entry.delete(0, tk.END)
+            self.desc_entry.delete(0, tk.END)
+            self.pattern_text.delete(1.0, tk.END)
+    
+    def test_pattern(self):
+        """Test the current pattern against test text."""
+        pattern = self.pattern_text.get(1.0, tk.END).strip()
+        test_text = self.test_text.get(1.0, tk.END).strip()
+        
+        if not pattern or not test_text:
+            self.test_result_label.config(text="❗ Need pattern and test text", foreground='red')
+            return
+        
+        try:
+            import re
+            matches = re.findall(pattern, test_text, re.IGNORECASE)
+            if matches:
+                self.test_result_label.config(
+                    text=f"✅ Found {len(matches)} match(es): {matches[:3]}", 
+                    foreground='green'
+                )
+            else:
+                self.test_result_label.config(text="❌ No matches found", foreground='orange')
+        except re.error as e:
+            self.test_result_label.config(text=f"❗ Invalid regex: {e}", foreground='red')
+    
+    def save_current_pattern(self):
+        """Save the currently edited pattern."""
+        selection = self.pattern_listbox.curselection()
+        if not selection:
+            return
+        
+        # Update pattern data
+        pattern = self.patterns[selection[0]]
+        pattern['name'] = self.name_entry.get().strip()
+        pattern['description'] = self.desc_entry.get().strip()
+        pattern['risk'] = self.risk_var.get()
+        pattern['pattern'] = self.pattern_text.get(1.0, tk.END).strip()
+        
+        self.refresh_pattern_list()
+        self.pattern_listbox.selection_set(selection[0])  # Maintain selection
+        
+        messagebox.showinfo("Saved", "Pattern updated successfully!")
+    
+    def save_and_close(self):
+        """Save all patterns and close dialog."""
+        self._save_custom_patterns()
+        messagebox.showinfo("Success", f"Saved {len(self.patterns)} custom patterns!")
+        self.dialog.destroy()
+
+
+class ErrorDialog:
+    """Enhanced error dialog with better user guidance."""
+    
+    def __init__(self, parent, title="Error", error_message="", error_type="error", 
+                 suggestions=None, show_details=False, technical_details=""):
+        self.parent = parent
+        self.title = title
+        self.error_message = error_message
+        self.error_type = error_type
+        self.suggestions = suggestions or []
+        self.show_details = show_details
+        self.technical_details = technical_details
+        
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title(title)
+        self.dialog.geometry("600x400")
+        self.dialog.resizable(True, True)
+        self.dialog.transient(parent)
+        self.dialog.grab_set()
+        
+        # Center the dialog
+        self.dialog.geometry("+%d+%d" % (
+            parent.winfo_rootx() + 50,
+            parent.winfo_rooty() + 50
+        ))
+        
+        self.create_widgets()
+        
+    def create_widgets(self):
+        """Create the error dialog widgets."""
+        main_frame = ttk.Frame(self.dialog, padding="20")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Header with icon and title
+        header_frame = ttk.Frame(main_frame)
+        header_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        # Error icon
+        icon = "❌" if self.error_type == "error" else "⚠️" if self.error_type == "warning" else "ℹ️"
+        icon_label = ttk.Label(header_frame, text=icon, font=("Arial", 24))
+        icon_label.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # Title
+        title_label = ttk.Label(header_frame, text=self.title, font=("Arial", 16, "bold"))
+        title_label.pack(side=tk.LEFT)
+        
+        # Error message
+        if self.error_message:
+            message_frame = ttk.LabelFrame(main_frame, text="Description", padding="10")
+            message_frame.pack(fill=tk.X, pady=(0, 15))
+            
+            message_text = tk.Text(message_frame, height=3, wrap=tk.WORD, font=("Arial", 10))
+            message_text.pack(fill=tk.X)
+            message_text.insert(tk.END, self.error_message)
+            message_text.config(state=tk.DISABLED)
+        
+        # Suggestions
+        if self.suggestions:
+            suggestions_frame = ttk.LabelFrame(main_frame, text="💡 Suggested Solutions", padding="10")
+            suggestions_frame.pack(fill=tk.X, pady=(0, 15))
+            
+            for i, suggestion in enumerate(self.suggestions, 1):
+                suggestion_label = ttk.Label(suggestions_frame, text=f"{i}. {suggestion}", 
+                                           wraplength=500, font=("Arial", 10))
+                suggestion_label.pack(anchor=tk.W, pady=2)
+        
+        # Technical details (collapsible)
+        if self.technical_details:
+            details_frame = ttk.LabelFrame(main_frame, text="🔧 Technical Details", padding="10")
+            
+            if self.show_details:
+                details_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
+                
+                details_text = scrolledtext.ScrolledText(details_frame, height=8, wrap=tk.WORD, 
+                                                       font=("Courier", 9))
+                details_text.pack(fill=tk.BOTH, expand=True)
+                details_text.insert(tk.END, self.technical_details)
+                details_text.config(state=tk.DISABLED)
+            
+            # Toggle button for details
+            self.details_visible = self.show_details
+            self.details_frame = details_frame
+            
+            toggle_button = ttk.Button(main_frame, text="🔽 Show Technical Details" if not self.show_details else "🔼 Hide Technical Details",
+                                     command=self.toggle_details)
+            toggle_button.pack(pady=(0, 15))
+            self.toggle_button = toggle_button
+        
+        # Buttons
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill=tk.X)
+        
+        # Help button (if applicable)
+        if self.error_type in ["auth_error", "api_error", "connection_error"]:
+            help_button = ttk.Button(button_frame, text="📖 Get Help", command=self.show_help)
+            help_button.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # Copy details button
+        if self.technical_details:
+            copy_button = ttk.Button(button_frame, text="📋 Copy Details", command=self.copy_details)
+            copy_button.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # OK button
+        ok_button = ttk.Button(button_frame, text="OK", command=self.dialog.destroy)
+        ok_button.pack(side=tk.RIGHT)
+        ok_button.focus_set()
+        
+        # Bind Enter key to OK button
+        self.dialog.bind('<Return>', lambda e: self.dialog.destroy())
+        self.dialog.bind('<Escape>', lambda e: self.dialog.destroy())
+    
+    def toggle_details(self):
+        """Toggle technical details visibility."""
+        if self.details_visible:
+            self.details_frame.pack_forget()
+            self.toggle_button.config(text="🔽 Show Technical Details")
+            self.details_visible = False
+        else:
+            self.details_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
+            self.toggle_button.config(text="🔼 Hide Technical Details")
+            self.details_visible = True
+    
+    def copy_details(self):
+        """Copy technical details to clipboard."""
+        self.dialog.clipboard_clear()
+        details = f"Error: {self.error_message}\n\nTechnical Details:\n{self.technical_details}"
+        self.dialog.clipboard_append(details)
+        
+        # Show brief confirmation
+        messagebox.showinfo("Copied", "Error details copied to clipboard", parent=self.dialog)
+    
+    def show_help(self):
+        """Show context-sensitive help."""
+        help_urls = {
+            "auth_error": "https://github.com/dev-alt/GitGuard#authentication-options",
+            "api_error": "https://github.com/dev-alt/GitGuard#troubleshooting",
+            "connection_error": "https://github.com/dev-alt/GitGuard#troubleshooting"
+        }
+        
+        url = help_urls.get(self.error_type)
+        if url:
+            webbrowser.open(url)
+
+
+class ErrorHandler:
+    """Centralized error handling with smart categorization and suggestions."""
+    
+    @staticmethod
+    def show_error(parent, error, context="", show_technical_details=False):
+        """Show an appropriately formatted error dialog."""
+        error_message = str(error)
+        suggestions = []
+        error_type = "error"
+        technical_details = ""
+        
+        # Generate technical details
+        if hasattr(error, '__traceback__') and error.__traceback__:
+            technical_details = ''.join(traceback.format_exception(type(error), error, error.__traceback__))
+        else:
+            technical_details = f"Error Type: {type(error).__name__}\nError Message: {error_message}\nContext: {context}"
+        
+        # Smart error categorization and suggestions
+        if "401" in error_message or "authentication" in error_message.lower():
+            error_type = "auth_error"
+            suggestions = [
+                "Check that your GitHub Personal Access Token is valid",
+                "Ensure your token has the required 'repo' or 'public_repo' permissions",
+                "Verify that your token hasn't expired",
+                "Try generating a new Personal Access Token at https://github.com/settings/tokens"
+            ]
+            
+        elif "404" in error_message or "not found" in error_message.lower():
+            error_type = "api_error"
+            suggestions = [
+                "Verify that the repository exists and you have access to it",
+                "Check that your authentication token has the correct permissions",
+                "Ensure the repository name format is correct (owner/repo)"
+            ]
+            
+        elif "403" in error_message or "rate limit" in error_message.lower():
+            error_type = "api_error"
+            suggestions = [
+                "GitHub API rate limit exceeded - please wait and try again",
+                "Use a Personal Access Token instead of username/password for higher rate limits",
+                "Consider reducing the number of repositories scanned simultaneously"
+            ]
+            
+        elif "connection" in error_message.lower() or "network" in error_message.lower():
+            error_type = "connection_error"
+            suggestions = [
+                "Check your internet connection",
+                "Verify that GitHub.com is accessible",
+                "Try again in a few moments - this might be a temporary issue",
+                "Check if you're behind a firewall or proxy that might block GitHub API access"
+            ]
+            
+        elif "file" in error_message.lower() or "permission" in error_message.lower():
+            error_type = "file_error"
+            suggestions = [
+                "Check that you have write permissions to the export directory",
+                "Ensure the file isn't open in another application",
+                "Try selecting a different location for saving files"
+            ]
+            
+        elif "json" in error_message.lower() or "parsing" in error_message.lower():
+            error_type = "data_error"
+            suggestions = [
+                "The configuration file may be corrupted - try resetting settings",
+                "Check that custom pattern files are properly formatted JSON",
+                "Consider clearing the application cache and trying again"
+            ]
+        
+        else:
+            # Generic error handling
+            suggestions = [
+                "Try the operation again - this might be a temporary issue",
+                "Check the application logs for more detailed information",
+                "Consider restarting the application if the problem persists"
+            ]
+        
+        # Create and show the error dialog
+        title = {
+            "auth_error": "Authentication Error",
+            "api_error": "GitHub API Error", 
+            "connection_error": "Connection Error",
+            "file_error": "File Operation Error",
+            "data_error": "Data Format Error"
+        }.get(error_type, "Application Error")
+        
+        dialog = ErrorDialog(
+            parent=parent,
+            title=title,
+            error_message=error_message,
+            error_type=error_type,
+            suggestions=suggestions,
+            show_details=show_technical_details,
+            technical_details=technical_details
+        )
+        
+        # Log the error
+        try:
+            get_logger().error(f"Error shown to user: {error_message}", context.upper() if context else "GUI", error)
+        except:
+            pass  # Don't let logging errors crash the error handler
 
 
 class GitGuardGUI:
@@ -2152,6 +2675,8 @@ repositories and commit history for sensitive information.
         # Tools menu
         tools_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Tools", menu=tools_menu)
+        tools_menu.add_command(label="🎨 Custom Patterns...", command=self.show_pattern_editor)
+        tools_menu.add_separator()
         tools_menu.add_command(label="View Logs...", command=self.show_logs_dialog)
         tools_menu.add_command(label="Export Settings...", command=self.export_settings)
         tools_menu.add_command(label="Import Settings...", command=self.import_settings)
@@ -2164,6 +2689,10 @@ repositories and commit history for sensitive information.
     def show_settings_dialog(self):
         """Show settings configuration dialog."""
         SettingsDialog(self.root, self.settings)
+    
+    def show_pattern_editor(self):
+        """Show custom pattern editor dialog."""
+        CustomPatternEditor(self.root)
     
     def clear_auth_cache(self):
         """Clear stored authentication cache."""
@@ -2211,7 +2740,7 @@ Recent Log Files:"""
                 shutil.copy2(self.settings.settings_file, filename)
                 messagebox.showinfo("Success", f"Settings exported to:\n{filename}")
             except Exception as e:
-                messagebox.showerror("Error", f"Failed to export settings:\n{e}")
+                ErrorHandler.show_error(self, e, "settings_export")
     
     def import_settings(self):
         """Import settings from file."""
@@ -2228,7 +2757,7 @@ Recent Log Files:"""
                     self.settings.load_settings()
                     messagebox.showinfo("Success", "Settings imported successfully.\nRestart the application for all changes to take effect.")
                 except Exception as e:
-                    messagebox.showerror("Error", f"Failed to import settings:\n{e}")
+                    ErrorHandler.show_error(self, e, "settings_import")
     
     def load_cached_auth(self):
         """Load cached authentication data if available."""
