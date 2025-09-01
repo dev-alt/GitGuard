@@ -37,6 +37,7 @@ class GitGuardSettings:
                 'window_geometry': '1200x800',
                 'window_maximized': False,
                 'remember_auth': False,
+                'remember_token': False,  # Option to save GitHub tokens (security risk warning required)
                 'auto_load_repos': False,
                 'confirm_destructive_actions': True
             },
@@ -168,17 +169,26 @@ class GitGuardSettings:
             return False
             
         try:
-            # Only save non-sensitive data
+            # Always save non-sensitive data
             cache_data = {
                 'username': auth_data.get('username', ''),
                 'method': auth_data.get('method', 'token'),
                 'last_used': auth_data.get('last_used', ''),
-                # NOTE: Never save actual tokens/passwords
             }
+            
+            # Optionally save token if user has explicitly enabled it
+            if self.get('gui.remember_token', False) and 'token' in auth_data:
+                # Simple obfuscation (not secure encryption, but better than plain text)
+                import base64
+                token = auth_data['token']
+                # Basic obfuscation - encode as base64
+                cache_data['token_obf'] = base64.b64encode(token.encode()).decode()
+                get_logger().debug("Authentication cache saved with token (obfuscated)", "SETTINGS")
+            else:
+                get_logger().debug("Authentication cache saved (no sensitive data)", "SETTINGS")
             
             with open(self.auth_file, 'w') as f:
                 json.dump(cache_data, f, indent=2)
-            get_logger().debug("Authentication cache saved (no sensitive data)", "SETTINGS")
             return True
             
         except Exception as e:
@@ -193,7 +203,25 @@ class GitGuardSettings:
         try:
             if self.auth_file.exists():
                 with open(self.auth_file, 'r') as f:
-                    return json.load(f)
+                    cache_data = json.load(f)
+                
+                # Deobfuscate token if present and user has enabled token saving
+                if 'token_obf' in cache_data and self.get('gui.remember_token', False):
+                    try:
+                        import base64
+                        token = base64.b64decode(cache_data['token_obf']).decode()
+                        cache_data['token'] = token
+                        del cache_data['token_obf']  # Remove obfuscated version
+                        get_logger().debug("Authentication cache loaded with token", "SETTINGS")
+                    except Exception as token_error:
+                        get_logger().error(f"Failed to deobfuscate token: {token_error}", "SETTINGS")
+                        # Remove corrupted token data
+                        if 'token_obf' in cache_data:
+                            del cache_data['token_obf']
+                else:
+                    get_logger().debug("Authentication cache loaded (no token)", "SETTINGS")
+                
+                return cache_data
         except Exception as e:
             get_logger().error(f"Failed to load auth cache: {e}", "SETTINGS", e)
         

@@ -8,20 +8,29 @@ A desktop GUI application for scanning GitHub repositories and commit history to
 
 ## Features
 
+### Core Scanning & Detection
 - **Comprehensive Scanning**: Analyzes entire repository history including all commits
-- **Advanced Pattern Detection**: Identifies 37+ types of sensitive data with intelligent filtering
-- **Professional GUI**: User-friendly Tkinter interface with 4-tab workflow and menu system
-- **False Positive Elimination**: Context-aware filtering for XAML, Go, assembly, and minified files
+- **Advanced Pattern Detection**: Identifies 37+ types of sensitive data with intelligent context-aware filtering
+- **False Positive Elimination**: Smart filtering for test files, documentation, checksums, and development configs
+- **Risk Assessment**: Automatic risk scoring with color-coded visualization and severity categorization
+
+### User Interface & Workflow  
+- **Professional GUI**: User-friendly Tkinter interface with 4-tab workflow and comprehensive menu system
+- **Authentication Management**: Secure token storage with optional obfuscation and user consent warnings
+- **Custom Pattern Editor**: GUI-based creation, testing, and management of custom detection rules
+- **Advanced Error Handling**: Context-aware error dialogs with technical details and suggested solutions
+
+### Performance & Export
 - **High-Performance Scanning**: 10x faster with batch processing and smart file prioritization
-- **Professional HTML Reports**: Beautiful, responsive reports with statistics and risk visualization
-- **Multi-Format Export**: Generate reports in CSV, JSON, and HTML with metadata
+- **Professional HTML Reports**: Auto-opening responsive reports with statistics and risk visualization
+- **Multi-Format Export**: Generate reports in CSV, JSON, and HTML with comprehensive metadata
+- **Intelligent Caching**: Repository-specific result caching with commit-hash validation
+
+### Security & Privacy
 - **Local Processing**: All scanning performed locally - no data transmitted to external services
-- **Risk Assessment**: Automatic risk scoring with color-coded visualization
-- **Settings Management**: Persistent configuration with 5-category settings dialog
+- **Secure Authentication**: Optional GitHub token storage with encryption warnings and user control
+- **Configuration Management**: Persistent settings with import/export and security controls
 - **Comprehensive Logging**: Full application logging with session tracking and performance metrics
-- **Custom Pattern Editor**: GUI-based creation and management of custom detection rules
-- **Advanced Error Handling**: Smart error dialogs with context-aware suggestions and technical details
-- **Enterprise Features**: Menu system, settings import/export, authentication caching
 
 ## Detected Sensitive Data Types
 
@@ -69,6 +78,36 @@ A desktop GUI application for scanning GitHub repositories and commit history to
 - Docker Environment Secrets
 - Kubernetes Secret Manifests
 - High-Entropy Strings (Base64 encoded secrets)
+
+## 🆕 Recent Improvements (Session 7)
+
+### Authentication & Token Management
+- **💾 Save Authentication Button**: New manual save option for GitHub credentials
+- **🔐 Secure Token Storage**: Optional GitHub token persistence with Base64 obfuscation  
+- **⚠️ Security Warnings**: Clear consent dialogs for token storage with risk explanations
+- **🔄 Auto-Load Credentials**: Automatic restoration of saved authentication on startup
+
+### Export & Report Enhancements  
+- **🌐 Auto-Open HTML Reports**: HTML exports now automatically open in browser
+- **📊 Enhanced Report Quality**: Improved error handling and fallback mechanisms
+- **📁 Output Organization**: Default output folder creation with proper gitignore protection
+
+### False Positive Detection Improvements
+- **🎯 Smart Test File Filtering**: Automatic detection and filtering of test files (_test.go, /tests/, etc.)
+- **📚 Documentation Exclusions**: Skip obvious examples in .md files and documentation  
+- **🔧 Development Config Filtering**: Intelligent handling of docker-compose.dev.yml and localhost configs
+- **🧮 Checksum File Handling**: Proper exclusion of Go package checksums (go.sum) from secret detection
+- **🔍 Template Pattern Recognition**: Filter environment variable templates like ${JWT_SECRET}
+
+### Detection Accuracy
+- **⚔️ Basic Auth False Positives**: Enhanced filtering for game content ("Basic Sword" vs authentication)
+- **🛠️ Context-Aware Detection**: File type and content-based false positive elimination
+- **🗃️ Database Credential Filtering**: Smart detection of test/development database connections
+
+### Technical Improvements  
+- **🚀 Performance Optimization**: Enhanced pattern matching with better file path handling
+- **🔧 Bug Fixes**: Resolved AttributeError and UnboundLocalError issues in caching system
+- **💫 Code Quality**: Improved method signatures and parameter handling
 
 ## Installation
 

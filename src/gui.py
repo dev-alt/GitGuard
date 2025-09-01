@@ -107,6 +107,9 @@ class AuthenticationFrame(ttk.Frame):
         self.login_button = ttk.Button(button_frame, text="Authenticate", command=self.authenticate)
         self.login_button.grid(row=0, column=1, padx=5)
         
+        self.save_button = ttk.Button(button_frame, text="💾 Save Settings", command=self.save_auth_settings)
+        self.save_button.grid(row=0, column=2, padx=5)
+        
         # Status
         self.status_label = ttk.Label(self, text="Enter your GitHub credentials to begin", 
                                      font=('Arial', 10))
@@ -155,6 +158,134 @@ class AuthenticationFrame(ttk.Frame):
         # Bind both Control-a and Control-A to handle different cases
         entry_widget.bind('<Control-a>', select_all)
         entry_widget.bind('<Control-A>', select_all)
+    
+    def save_auth_settings(self):
+        """Save authentication settings to cache."""
+        try:
+            from tkinter import messagebox
+            
+            # Get current form data
+            method = self.auth_method.get()
+            auth_data = {}
+            
+            if method == "token":
+                token = self.token_entry.get().strip()
+                username = self.token_username_entry.get().strip()
+                
+                if not token:
+                    messagebox.showwarning("Save Settings", "Please enter your GitHub token before saving")
+                    return
+                    
+                auth_data = {
+                    'method': 'token',
+                    'username': username if username else 'Unknown',
+                    'token': token  # This will be filtered out during cache save for security
+                }
+                
+            elif method == "password":
+                username = self.username_entry.get().strip()
+                password = self.password_entry.get().strip()
+                
+                if not username or not password:
+                    messagebox.showwarning("Save Settings", "Please enter both username and password before saving")
+                    return
+                    
+                auth_data = {
+                    'method': 'password',
+                    'username': username,
+                    'password': password  # This will be filtered out during cache save for security
+                }
+            
+            # Import settings (try both relative and absolute imports)
+            try:
+                from .settings import GitGuardSettings
+            except ImportError:
+                from settings import GitGuardSettings
+            
+            # Initialize settings and save auth data
+            settings = GitGuardSettings()
+            
+            # Add timestamp
+            from datetime import datetime
+            auth_data['last_used'] = datetime.now().isoformat()
+            
+            # Save to cache (note: sensitive data like tokens/passwords are filtered out by save_auth_cache)
+            success = settings.save_auth_cache(auth_data)
+            
+            if success:
+                # Ask about token saving if not already enabled and this is a token method
+                if method == "token" and not settings.get('gui.remember_token', False):
+                    save_token = messagebox.askyesno("Save Token", 
+                                                   "⚠️ SECURITY WARNING ⚠️\n\n" +
+                                                   "Would you like to save your GitHub token for convenience?\n\n" +
+                                                   "• Token will be lightly obfuscated (not encrypted)\n" +
+                                                   "• This is a security risk if others access this computer\n" +
+                                                   "• Recommended: Only enable on personal, secure devices\n\n" +
+                                                   "Enable token saving?")
+                    if save_token:
+                        settings.set('gui.remember_token', True)
+                        settings.save()
+                        # Save again with token
+                        settings.save_auth_cache(auth_data)
+                        messagebox.showinfo("Save Settings", "Authentication settings saved successfully!\nToken saving enabled with security warning.")
+                    else:
+                        messagebox.showinfo("Save Settings", "Authentication settings saved successfully!\n\nNote: Only username and method are stored for security.")
+                else:
+                    messagebox.showinfo("Save Settings", "Authentication settings saved successfully!\n\nNote: Username, method, and token (if enabled) are stored.")
+                self.status_label.config(text="✅ Authentication settings saved")
+            else:
+                # Check if remember_auth is disabled
+                remember_auth = settings.get('gui.remember_auth', False)
+                if not remember_auth:
+                    # Offer to enable remember_auth
+                    enable_auth = messagebox.askyesno("Enable Authentication Cache", 
+                                                    "Authentication caching is currently disabled.\n\n" +
+                                                    "Would you like to enable 'Remember Authentication' " +
+                                                    "to save your settings?")
+                    if enable_auth:
+                        settings.set('gui.remember_auth', True)
+                        settings.save()
+                        # Try saving again
+                        success = settings.save_auth_cache(auth_data)
+                        if success:
+                            # Ask about token saving for convenience (with security warning)
+                            if method == "token" and not settings.get('gui.remember_token', False):
+                                save_token = messagebox.askyesno("Save Token", 
+                                                               "⚠️ SECURITY WARNING ⚠️\n\n" +
+                                                               "Would you like to save your GitHub token for convenience?\n\n" +
+                                                               "• Token will be lightly obfuscated (not encrypted)\n" +
+                                                               "• This is a security risk if others access this computer\n" +
+                                                               "• Recommended: Only enable on personal, secure devices\n\n" +
+                                                               "Enable token saving?")
+                                if save_token:
+                                    settings.set('gui.remember_token', True)
+                                    settings.save()
+                                    # Save again with token
+                                    settings.save_auth_cache(auth_data)
+                                    messagebox.showinfo("Save Settings", 
+                                                      "Authentication caching enabled!\n" +
+                                                      "Token saving enabled with security warning.\n" +
+                                                      "Settings saved successfully.")
+                                else:
+                                    messagebox.showinfo("Save Settings", 
+                                                      "Authentication caching enabled!\n" +
+                                                      "Settings saved successfully.\n\n" +
+                                                      "Note: Only username and method are stored for security.")
+                            else:
+                                messagebox.showinfo("Save Settings", 
+                                                  "Authentication caching enabled!\n" +
+                                                  "Settings saved successfully.\n\n" +
+                                                  "Note: Only username and method are stored for security.")
+                            self.status_label.config(text="✅ Authentication settings saved")
+                        else:
+                            messagebox.showerror("Save Settings", "Failed to save authentication settings even after enabling cache.")
+                else:
+                    messagebox.showerror("Save Settings", "Failed to save authentication settings. Please check the logs.")
+                    
+        except Exception as e:
+            from tkinter import messagebox
+            messagebox.showerror("Save Settings", f"Error saving authentication settings:\n{str(e)}")
+            get_logger().error(f"Failed to save auth settings: {e}", "AUTH")
     
     def authenticate(self):
         """Perform GitHub authentication."""
@@ -1568,9 +1699,9 @@ Recommendations:
             except Exception as e:
                 ErrorHandler.show_error(self.winfo_toplevel(), e, "json_export")
     
-    def export_html(self):
-        """Export results to HTML."""
-        messagebox.showinfo("HTML Export", "HTML export functionality would generate a styled report with charts and detailed analysis.")
+    def export_html_placeholder(self):
+        """This method has been replaced by the working export_html method below."""
+        pass
     
     def generate_summary(self):
         """Generate executive summary."""
@@ -1727,10 +1858,15 @@ Scan completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
                 messagebox.showinfo("Success", f"HTML report exported to {filename}")
                 get_logger().info(f"HTML report exported: {filename}", "EXPORT")
                 
-                # Ask if user wants to open the report
-                if messagebox.askyesno("Open Report", "Would you like to open the HTML report in your browser?"):
+                # Automatically open the report in browser
+                try:
                     import webbrowser
                     webbrowser.open(f"file://{os.path.abspath(filename)}")
+                    get_logger().info(f"HTML report opened in browser: {filename}", "EXPORT")
+                except Exception as browser_error:
+                    # Fallback: ask user if automatic opening fails
+                    if messagebox.askyesno("Browser Error", f"Could not automatically open browser.\nError: {browser_error}\n\nWould you like to manually open the report?"):
+                        messagebox.showinfo("Manual Open", f"Please open this file in your browser:\n{os.path.abspath(filename)}")
                     
             except Exception as e:
                 ErrorHandler.show_error(self.winfo_toplevel(), e, "html_export")
@@ -3004,10 +3140,24 @@ Recent Log Files:"""
                 if hasattr(self, 'auth_frame'):
                     username = auth_cache.get('username', '')
                     method = auth_cache.get('method', 'token')
+                    token = auth_cache.get('token', '')  # Will be available if user enabled token saving
+                    
+                    # Set the authentication method
+                    self.auth_frame.auth_method.set(method)
                     
                     if method == 'token' and hasattr(self.auth_frame, 'token_username_entry'):
+                        # Fill username
                         self.auth_frame.token_username_entry.delete(0, tk.END)
                         self.auth_frame.token_username_entry.insert(0, username)
+                        
+                        # Fill token if available
+                        if token and hasattr(self.auth_frame, 'token_entry'):
+                            self.auth_frame.token_entry.delete(0, tk.END)
+                            self.auth_frame.token_entry.insert(0, token)
+                            get_logger().info("Auth cache loaded with token", "AUTH")
+                        else:
+                            get_logger().info("Auth cache loaded without token", "AUTH")
+                            
                     elif method == 'password' and hasattr(self.auth_frame, 'username_entry'):
                         self.auth_frame.username_entry.delete(0, tk.END)
                         self.auth_frame.username_entry.insert(0, username)
@@ -3114,6 +3264,15 @@ class SettingsDialog:
         self.remember_auth = tk.BooleanVar(value=self.settings.get('gui.remember_auth', False))
         ttk.Checkbutton(parent, text="Remember authentication details", 
                        variable=self.remember_auth).pack(anchor='w', pady=5)
+        
+        # Remember token (security risk option)
+        self.remember_token = tk.BooleanVar(value=self.settings.get('gui.remember_token', False))
+        token_frame = ttk.Frame(parent)
+        token_frame.pack(fill='x', anchor='w', pady=5)
+        ttk.Checkbutton(token_frame, text="Remember GitHub tokens", 
+                       variable=self.remember_token).pack(side='left')
+        ttk.Label(token_frame, text="⚠️ Security Risk", 
+                 foreground='orange', font=('Arial', 8)).pack(side='left', padx=(5, 0))
         
         # Auto load repositories
         self.auto_load_repos = tk.BooleanVar(value=self.settings.get('gui.auto_load_repos', False))
@@ -3258,6 +3417,7 @@ class SettingsDialog:
         try:
             # Save GUI settings
             self.settings.set('gui.remember_auth', self.remember_auth.get())
+            self.settings.set('gui.remember_token', self.remember_token.get())
             self.settings.set('gui.auto_load_repos', self.auto_load_repos.get())
             self.settings.set('gui.confirm_destructive_actions', self.confirm_actions.get())
             

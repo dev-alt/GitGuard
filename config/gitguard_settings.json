@@ -1,8 +1,9 @@
 {
   "gui": {
-    "window_geometry": "1200x800+263+172",
+    "window_geometry": "1200x800+715+167",
     "window_maximized": false,
     "remember_auth": true,
+    "remember_token": true,
     "auto_load_repos": true,
     "confirm_destructive_actions": true
   },
