@@ -20,9 +20,11 @@ from datetime import datetime
 try:
     from .logger import get_logger, init_logging
     from .settings import get_settings, init_settings
+    from .result_cache import get_cache
 except ImportError:
     from logger import get_logger, init_logging
     from settings import get_settings, init_settings
+    from result_cache import get_cache
 
 class AuthenticationFrame(ttk.Frame):
     """Frame for GitHub authentication."""
@@ -451,6 +453,11 @@ class RepositoryFrame(ttk.Frame):
                                      command=self.start_scan, state='disabled')
         self.scan_button.pack(side='left', padx=10)
         
+        # Scan selected repository button
+        self.scan_selected_button = ttk.Button(action_frame, text="⚡ Scan Selected Repo", 
+                                              command=self.scan_selected_repo, state='disabled')
+        self.scan_selected_button.pack(side='left', padx=5)
+        
         # Status
         self.repo_status_label = ttk.Label(self, text="Please authenticate first to load repositories")
         self.repo_status_label.grid(row=6, column=0, columnspan=4, pady=5)
@@ -542,6 +549,7 @@ class RepositoryFrame(ttk.Frame):
         self.select_all_button.config(state='normal')
         self.deselect_all_button.config(state='normal')
         self.auto_scan_button.config(state='normal')
+        self.scan_selected_button.config(state='normal')
         
         self.repo_status_label.config(text=f"✅ Loaded {len(repositories)} repositories")
     
@@ -692,6 +700,31 @@ class RepositoryFrame(ttk.Frame):
             'max_commits': int(self.max_commits_var.get()),
             'include_files': self.include_files.get().split(','),
             'auth_data': self.auth_data
+        }
+        
+        # Notify parent to start scan
+        self.on_scan_start(scan_config)
+    
+    def scan_selected_repo(self):
+        """Scan the currently selected repository directly."""
+        # Get the currently selected item in the tree
+        selection = self.repo_tree.selection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select a repository to scan")
+            return
+        
+        selected_item = selection[0]
+        repo_full_name = self.repo_tree.set(selected_item, 'full_name')
+        
+        # Get scan configuration
+        scan_config = {
+            'repositories': [repo_full_name],
+            'scan_depth': self.scan_depth.get(),
+            'max_commits': int(self.max_commits_var.get()),
+            'include_files': self.include_files.get().split(','),
+            'auth_data': self.auth_data,
+            'single_repo_mode': True,  # Flag to indicate this is single repo scanning
+            'use_cache': True  # Enable caching for single repo scans
         }
         
         # Notify parent to start scan
@@ -901,8 +934,63 @@ class ScanProgressFrame(ttk.Frame):
         # Start scanning in background thread
         def scan_thread():
             try:
-                findings = self.scanner.scan_repositories(scan_config)
-                summary = self.scanner.get_scan_summary()
+                # Check if we should use caching
+                use_cache = scan_config.get('use_cache', False)
+                findings = []
+                cached_repos = []
+                
+                if use_cache:
+                    # Try to get cached results first
+                    cache = get_cache()
+                    repositories = scan_config.get('repositories', [])
+                    
+                    for repo_name in repositories:
+                        try:
+                            # Get repository object for cache validation
+                            repo_obj = github_client.get_repo(repo_name)
+                            cached_results = cache.get_cached_results(repo_name, repo_obj, scan_config)
+                            
+                            if cached_results:
+                                findings.extend(cached_results)
+                                cached_repos.append(repo_name)
+                                get_logger().info(f"Using cached results for {repo_name}", "SCAN")
+                            
+                        except Exception as e:
+                            get_logger().debug(f"Cache check failed for {repo_name}: {e}", "SCAN")
+                    
+                    # Remove cached repos from scan config
+                    remaining_repos = [repo for repo in repositories if repo not in cached_repos]
+                    scan_config = scan_config.copy()
+                    scan_config['repositories'] = remaining_repos
+                    
+                    # Update progress for cached results
+                    if cached_repos:
+                        progress_msg = f"Loaded {len(cached_repos)} repositories from cache"
+                        self.after(0, lambda: self._update_status(progress_msg))
+                
+                # Scan remaining repositories
+                if scan_config.get('repositories'):
+                    new_findings = self.scanner.scan_repositories(scan_config)
+                    findings.extend(new_findings)
+                    
+                    # Cache the new results if caching is enabled
+                    if use_cache:
+                        cache = get_cache()
+                        for repo_name in scan_config['repositories']:
+                            try:
+                                repo_obj = github_client.get_repo(repo_name)
+                                repo_findings = [f for f in new_findings if f.get('repository') == repo_name]
+                                cache.store_results(repo_name, repo_obj, scan_config, repo_findings)
+                            except Exception as e:
+                                get_logger().debug(f"Failed to cache results for {repo_name}: {e}", "SCAN")
+                
+                summary = self.scanner.get_scan_summary() if hasattr(self.scanner, 'get_scan_summary') else {}
+                
+                # Update scan summary with cache info
+                if use_cache and cached_repos:
+                    summary['cached_repositories'] = len(cached_repos)
+                    summary['scanned_repositories'] = len(scan_config.get('repositories', []))
+                    summary['total_repositories'] = len(cached_repos) + len(scan_config.get('repositories', []))
                 
                 # Update UI on main thread
                 self.after(0, lambda: self._on_scan_complete(findings, summary))
@@ -914,6 +1002,10 @@ class ScanProgressFrame(ttk.Frame):
         import threading
         self.scan_thread = threading.Thread(target=scan_thread, daemon=True)
         self.scan_thread.start()
+    
+    def _update_status(self, message):
+        """Update the status label."""
+        self.status_label.config(text=message)
     
     def _on_scan_progress(self, progress):
         """Handle scan progress updates."""
@@ -2630,6 +2722,115 @@ https://github.com/dev-alt/GitGuard
         
         messagebox.showinfo("Documentation", docs_text)
     
+    def show_cache_manager(self):
+        """Show cache management dialog."""
+        cache = get_cache()
+        cache_info = cache.get_cache_info()
+        
+        dialog = tk.Toplevel(self.root)
+        dialog.title("💾 Cache Management")
+        dialog.geometry("600x500")
+        dialog.resizable(True, True)
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Center dialog
+        dialog.geometry("+%d+%d" % (
+            self.root.winfo_rootx() + 50,
+            self.root.winfo_rooty() + 50
+        ))
+        
+        main_frame = ttk.Frame(dialog, padding="20")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Header
+        header_label = ttk.Label(main_frame, text="💾 Scan Result Cache Management", 
+                               font=("Arial", 14, "bold"))
+        header_label.pack(pady=(0, 15))
+        
+        # Cache stats
+        stats_frame = ttk.LabelFrame(main_frame, text="Cache Statistics", padding="10")
+        stats_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        stats_text = f"""Directory: {cache_info.get('cache_directory', 'N/A')}
+Total Entries: {cache_info.get('total_entries', 0)}
+Total Size: {cache_info.get('total_size_mb', 0)} MB
+Max Entries: {cache_info.get('max_entries', 0)}
+Max Age: {cache_info.get('max_age_days', 0)} days"""
+        
+        stats_label = ttk.Label(stats_frame, text=stats_text, font=("Courier", 10))
+        stats_label.pack(anchor='w')
+        
+        # Cache entries
+        if cache_info.get('cache_details'):
+            entries_frame = ttk.LabelFrame(main_frame, text="Recent Cache Entries", padding="10")
+            entries_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
+            
+            # Create treeview for cache entries
+            tree_frame = ttk.Frame(entries_frame)
+            tree_frame.pack(fill=tk.BOTH, expand=True)
+            
+            cache_tree = ttk.Treeview(tree_frame, columns=("repo", "date", "findings", "size"), show="headings", height=8)
+            cache_tree.pack(side='left', fill='both', expand=True)
+            
+            # Configure columns
+            cache_tree.heading("repo", text="Repository")
+            cache_tree.heading("date", text="Scan Date")
+            cache_tree.heading("findings", text="Findings")
+            cache_tree.heading("size", text="Size (KB)")
+            
+            cache_tree.column("repo", width=200)
+            cache_tree.column("date", width=120)
+            cache_tree.column("findings", width=80)
+            cache_tree.column("size", width=80)
+            
+            # Add scrollbar
+            tree_scroll = ttk.Scrollbar(tree_frame, orient='vertical', command=cache_tree.yview)
+            tree_scroll.pack(side='right', fill='y')
+            cache_tree.config(yscrollcommand=tree_scroll.set)
+            
+            # Populate tree
+            for entry in cache_info.get('cache_details', []):
+                cache_tree.insert('', 'end', values=(
+                    entry.get('repo_name', 'Unknown'),
+                    entry.get('scan_date', '').split('T')[0] if 'T' in entry.get('scan_date', '') else entry.get('scan_date', ''),
+                    entry.get('result_count', 0),
+                    round(entry.get('file_size', 0) / 1024, 1)
+                ))
+        
+        # Action buttons
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill=tk.X)
+        
+        ttk.Button(button_frame, text="🗑️ Clear All Cache", 
+                  command=lambda: self._clear_all_cache(dialog)).pack(side='left', padx=5)
+        
+        ttk.Button(button_frame, text="🔄 Refresh", 
+                  command=lambda: self._refresh_cache_dialog(dialog)).pack(side='left', padx=5)
+        
+        ttk.Button(button_frame, text="Close", 
+                  command=dialog.destroy).pack(side='right')
+    
+    def _clear_all_cache(self, parent_dialog):
+        """Clear all cache with confirmation."""
+        if messagebox.askyesno("Clear Cache", "Are you sure you want to clear all scan result cache?", parent=parent_dialog):
+            cache = get_cache()
+            cache.clear_all_cache()
+            messagebox.showinfo("Cache Cleared", "All scan result cache has been cleared.", parent=parent_dialog)
+            self._refresh_cache_dialog(parent_dialog)
+    
+    def _refresh_cache_dialog(self, dialog):
+        """Refresh the cache management dialog."""
+        dialog.destroy()
+        self.show_cache_manager()
+    
+    def clear_scan_cache(self):
+        """Clear scan cache from menu."""
+        if messagebox.askyesno("Clear Cache", "Are you sure you want to clear all scan result cache?"):
+            cache = get_cache()
+            cache.clear_all_cache()
+            messagebox.showinfo("Cache Cleared", "All scan result cache has been cleared.")
+    
     def show_about(self):
         """Show about dialog."""
         about_text = """GitGuard - GitHub Security Scanner v1.0.0
@@ -2676,6 +2877,9 @@ repositories and commit history for sensitive information.
         tools_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Tools", menu=tools_menu)
         tools_menu.add_command(label="🎨 Custom Patterns...", command=self.show_pattern_editor)
+        tools_menu.add_separator()
+        tools_menu.add_command(label="💾 Cache Management...", command=self.show_cache_manager)
+        tools_menu.add_command(label="🗑️ Clear Scan Cache", command=self.clear_scan_cache)
         tools_menu.add_separator()
         tools_menu.add_command(label="View Logs...", command=self.show_logs_dialog)
         tools_menu.add_command(label="Export Settings...", command=self.export_settings)
